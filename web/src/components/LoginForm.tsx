@@ -1,6 +1,6 @@
-import { useState, type FormEvent } from 'react';
+import { useState } from 'react';
 import { GoogleLogin, type CredentialResponse } from '@react-oauth/google';
-import { login, loginWithGoogle } from '../services/auth';
+import { loginWithGoogle } from '../services/auth';
 
 interface LoginFormProps {
   onSuccess: () => void;
@@ -9,24 +9,8 @@ interface LoginFormProps {
 const GOOGLE_CLIENT_ID = import.meta.env.VITE_GOOGLE_CLIENT_ID;
 
 export function LoginForm({ onSuccess }: LoginFormProps) {
-  const [password, setPassword] = useState('');
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
-
-  async function handleSubmit(e: FormEvent) {
-    e.preventDefault();
-    setError(null);
-    setLoading(true);
-
-    try {
-      await login({ password });
-      onSuccess();
-    } catch (err) {
-      setError(err instanceof Error ? err.message : 'Login failed');
-    } finally {
-      setLoading(false);
-    }
-  }
 
   async function handleGoogleSuccess(response: CredentialResponse) {
     if (!response.credential) {
@@ -53,48 +37,31 @@ export function LoginForm({ onSuccess }: LoginFormProps) {
 
   return (
     <div className="login-form-container">
-      <form className="login-form" onSubmit={handleSubmit}>
+      <div className="login-form">
         <h1>Remote Control</h1>
-        <p className="login-subtitle">Enter password to connect</p>
+        <p className="login-subtitle">Sign in with Google to connect</p>
 
         {error && <div className="error-message">{error}</div>}
 
-        <div className="form-group">
-          <input
-            type="password"
-            value={password}
-            onChange={(e) => setPassword(e.target.value)}
-            placeholder="Password"
-            required
-            disabled={loading}
-            autoFocus
-          />
-        </div>
-
-        <button type="submit" disabled={loading || !password}>
-          {loading ? 'Connecting...' : 'Connect'}
-        </button>
-
-        {GOOGLE_CLIENT_ID && (
-          <>
-            <div className="login-divider">
-              <span>or</span>
-            </div>
-
-            <div className="google-login-wrapper">
-              <GoogleLogin
-                onSuccess={handleGoogleSuccess}
-                onError={handleGoogleError}
-                theme="filled_black"
-                size="large"
-                width="320"
-                text="signin_with"
-                shape="rectangular"
-              />
-            </div>
-          </>
+        {GOOGLE_CLIENT_ID ? (
+          <div className="google-login-wrapper">
+            <GoogleLogin
+              onSuccess={handleGoogleSuccess}
+              onError={handleGoogleError}
+              theme="filled_black"
+              size="large"
+              width="320"
+              text="signin_with"
+              shape="rectangular"
+            />
+            {loading && <p className="login-subtitle">Signing in...</p>}
+          </div>
+        ) : (
+          <div className="error-message">
+            Google sign-in is not configured. Set <code>VITE_GOOGLE_CLIENT_ID</code> to enable login.
+          </div>
         )}
-      </form>
+      </div>
     </div>
   );
 }

@@ -1,8 +1,4 @@
 // Authentication types
-export interface LoginCredentials {
-  password: string;
-}
-
 export interface GoogleLoginCredentials {
   credential: string;
 }
