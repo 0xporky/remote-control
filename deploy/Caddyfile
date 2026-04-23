@@ -1,0 +1,21 @@
+# Caddy auto-TLS via Let's Encrypt. {$FQDN} is provided by docker compose from .env.
+# Path routing: server handles /api and /ws, web handles everything else.
+
+{$FQDN} {
+	encode zstd gzip
+
+	# WebSocket signaling — must be before /api so it takes precedence.
+	handle /ws/* {
+		reverse_proxy server:8000
+	}
+
+	# REST API
+	handle /api/* {
+		reverse_proxy server:8000
+	}
+
+	# Static SPA
+	handle {
+		reverse_proxy web:80
+	}
+}

@@ -1,0 +1,53 @@
+#cloud-config
+# Cloud-init for the remote-control droplet.
+# Installs Docker, creates an `rc` user, configures the firewall.
+
+package_update: true
+package_upgrade: false
+
+packages:
+  - ca-certificates
+  - curl
+  - gnupg
+  - rsync
+  - ufw
+
+users:
+  - name: rc
+    groups: [sudo, docker]
+    shell: /bin/bash
+    sudo: ALL=(ALL) NOPASSWD:ALL
+    ssh_authorized_keys:
+      # Populated from /root/.ssh/authorized_keys at runtime (see runcmd below).
+
+runcmd:
+  # Install Docker via the official convenience script.
+  - curl -fsSL https://get.docker.com | sh
+  - systemctl enable --now docker
+  - usermod -aG docker rc
+
+  # Copy the root authorized_keys (the DO-provisioned one) to the rc user
+  # so the operator's SSH key works for `rc@` as well.
+  - mkdir -p /home/rc/.ssh
+  - cp /root/.ssh/authorized_keys /home/rc/.ssh/authorized_keys
+  - chmod 700 /home/rc/.ssh
+  - chmod 600 /home/rc/.ssh/authorized_keys
+  - chown -R rc:rc /home/rc/.ssh
+
+  # 1 GiB swap — the build step can briefly spike memory on an s-1vcpu-1gb droplet.
+  - fallocate -l 1G /swapfile
+  - chmod 600 /swapfile
+  - mkswap /swapfile
+  - swapon /swapfile
+  - echo '/swapfile none swap sw 0 0' >> /etc/fstab
+
+  # UFW: allow SSH, HTTP, HTTPS only.
+  - ufw default deny incoming
+  - ufw default allow outgoing
+  - ufw allow 22/tcp
+  - ufw allow 80/tcp
+  - ufw allow 443/tcp
+  - ufw --force enable
+
+  # Signal to up.sh that cloud-init finished.
+  - touch /var/lib/cloud/instance/cloud-init-complete

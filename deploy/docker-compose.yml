@@ -1,0 +1,50 @@
+services:
+  caddy:
+    image: caddy:2
+    restart: unless-stopped
+    ports:
+      - "80:80"
+      - "443:443"
+    environment:
+      FQDN: ${FQDN}
+    volumes:
+      - ./Caddyfile:/etc/caddy/Caddyfile:ro
+      - caddy_data:/data
+      - caddy_config:/config
+    depends_on:
+      - server
+      - web
+
+  server:
+    build:
+      context: ./server
+    restart: unless-stopped
+    expose:
+      - "8000"
+    environment:
+      SECRET_KEY: ${SECRET_KEY}
+      AUTH_PASSWORD: ${AUTH_PASSWORD}
+      AGENT_TOKEN_REQUIRED: ${AGENT_TOKEN_REQUIRED:-true}
+      AGENT_TOKENS: ${AGENT_TOKENS}
+      GOOGLE_CLIENT_ID: ${GOOGLE_CLIENT_ID}
+      GOOGLE_ALLOWED_EMAILS: ${GOOGLE_ALLOWED_EMAILS}
+      GOOGLE_ALLOWED_DOMAINS: ${GOOGLE_ALLOWED_DOMAINS}
+      CORS_ORIGINS: https://${FQDN}
+      ACCESS_TOKEN_EXPIRE_MINUTES: ${ACCESS_TOKEN_EXPIRE_MINUTES:-60}
+      WS_SESSION_TIMEOUT_SECONDS: ${WS_SESSION_TIMEOUT_SECONDS:-3600}
+      SSL_ENABLED: "false"
+
+  web:
+    build:
+      context: ./web
+      args:
+        VITE_API_URL: https://${FQDN}
+        VITE_WS_URL: wss://${FQDN}
+        VITE_GOOGLE_CLIENT_ID: ${GOOGLE_CLIENT_ID}
+    restart: unless-stopped
+    expose:
+      - "80"
+
+volumes:
+  caddy_data:
+  caddy_config:
