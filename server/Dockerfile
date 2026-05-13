@@ -58,7 +58,6 @@ ENV PORT=8000
 
 # Security defaults (OVERRIDE IN PRODUCTION!)
 # ENV SECRET_KEY=change-this-in-production
-# ENV AUTH_PASSWORD=admin
 
 # SSL disabled by default
 ENV SSL_ENABLED=false

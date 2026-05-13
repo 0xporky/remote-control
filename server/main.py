@@ -13,8 +13,8 @@ from fastapi.responses import FileResponse
 
 import config
 from auth import (
-    Token, LoginRequest, GoogleLoginRequest,
-    create_access_token, authenticate,
+    Token, GoogleLoginRequest,
+    create_access_token,
     verify_google_token, is_google_user_allowed
 )
 from routes.websocket import router as websocket_router
@@ -66,46 +66,12 @@ async def health_check():
     return {"status": "healthy", "message": "Server is running"}
 
 
-@app.post("/api/auth/login", response_model=Token)
-async def login(request: LoginRequest, req: Request):
-    """Authenticate and return a JWT token."""
-    client_ip = get_client_ip(req)
-
-    # Check rate limit
-    is_allowed, message = await login_rate_limiter.is_allowed(client_ip)
-    if not is_allowed:
-        logger.warning(f"Rate limited login attempt from {client_ip}")
-        raise HTTPException(
-            status_code=status.HTTP_429_TOO_MANY_REQUESTS,
-            detail=message,
-        )
-
-    if not authenticate(request.password):
-        # Record failed attempt
-        await login_rate_limiter.record_attempt(client_ip, success=False)
-        raise HTTPException(
-            status_code=status.HTTP_401_UNAUTHORIZED,
-            detail="Incorrect password",
-            headers={"WWW-Authenticate": "Bearer"},
-        )
-
-    # Record successful login (clears rate limit)
-    await login_rate_limiter.record_attempt(client_ip, success=True)
-
-    access_token_expires = timedelta(minutes=config.ACCESS_TOKEN_EXPIRE_MINUTES)
-    access_token = create_access_token(
-        data={"sub": "user"},
-        expires_delta=access_token_expires,
-    )
-    return Token(access_token=access_token, token_type="bearer")
-
-
 @app.post("/api/auth/google", response_model=Token)
 async def google_login(request: GoogleLoginRequest, req: Request):
     """Authenticate using Google OAuth and return a JWT token."""
     client_ip = get_client_ip(req)
 
-    # Check rate limit (shared with password login)
+    # Check rate limit
     is_allowed, message = await login_rate_limiter.is_allowed(client_ip)
     if not is_allowed:
         logger.warning(f"Rate limited Google login attempt from {client_ip}")

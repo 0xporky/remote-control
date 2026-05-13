@@ -63,14 +63,12 @@ All configuration is done via environment variables. Create a `.env` file or exp
 |----------|-------------|---------|
 | `SECRET_KEY` | JWT signing key (change in production!) | `change-this-...` |
 | `ACCESS_TOKEN_EXPIRE_MINUTES` | JWT token lifetime | `60` |
-| `AUTH_PASSWORD` | Password for client authentication | `admin` |
 
 ### Agent Authorization
 
 | Variable | Description | Default |
 |----------|-------------|---------|
-| `AGENT_TOKENS` | Comma-separated list of valid agent tokens | None |
-| `AGENT_TOKEN_REQUIRED` | Require token for agent registration | `false` |
+| `AGENT_TOKENS` | Comma-separated list of valid agent tokens. **Required** — empty list rejects all agents. | None |
 
 ### Rate Limiting
 
@@ -123,7 +121,7 @@ Server starts at `http://localhost:8000` with auto-reload enabled.
 ```bash
 # Set secure configuration
 export SECRET_KEY="your-secure-random-key-at-least-32-chars"
-export AUTH_PASSWORD="your-secure-password"
+export AGENT_TOKENS="token1,token2,token3"
 export SSL_ENABLED=true
 export SSL_KEYFILE=/path/to/privkey.pem
 export SSL_CERTFILE=/path/to/fullchain.pem
@@ -140,7 +138,7 @@ docker build -t remote-control-server .
 # Run with environment variables
 docker run -p 8000:8000 \
   -e SECRET_KEY="your-secure-key" \
-  -e AUTH_PASSWORD="your-password" \
+  -e AGENT_TOKENS="token1,token2" \
   remote-control-server
 
 # Run with .env file
@@ -152,10 +150,8 @@ docker run -p 8000:8000 --env-file .env remote-control-server
 ```env
 # Security (CHANGE THESE IN PRODUCTION)
 SECRET_KEY=your-very-long-and-secure-random-string-here
-AUTH_PASSWORD=your-secure-password
 
-# Optional: Agent token authorization
-AGENT_TOKEN_REQUIRED=true
+# Required: Agent authorization tokens (comma-separated)
 AGENT_TOKENS=token1,token2,token3
 
 # Optional: Google OAuth
@@ -177,18 +173,6 @@ SSL_CERTFILE=/etc/ssl/certs/server.crt
 GET /api/health
 ```
 Returns `{"status": "ok"}` if server is running.
-
-#### Password Login
-```
-POST /api/auth/login
-Content-Type: application/json
-
-{"password": "your-password"}
-```
-Returns JWT token on success:
-```json
-{"access_token": "eyJ...", "token_type": "bearer"}
-```
 
 #### Google OAuth Login
 ```
@@ -223,7 +207,7 @@ WS /ws/signaling
 
 **Agent Registration:**
 ```json
-{"type": "register", "agent_id": "my-agent", "password": "secret", "token": "optional-agent-token"}
+{"type": "register", "agent_id": "my-agent", "token": "agent-token"}
 ```
 
 **Get Available Agents:**
@@ -248,7 +232,6 @@ WS /ws/signaling
 
 ### Authentication Failures
 
-- Verify password matches `AUTH_PASSWORD` configuration
 - Check JWT `SECRET_KEY` is consistent across restarts
 - For Google OAuth, verify `GOOGLE_CLIENT_ID` matches frontend
 
@@ -266,9 +249,8 @@ WS /ws/signaling
 
 ### Agent Registration Fails
 
-- If `AGENT_TOKEN_REQUIRED=true`, agent must provide valid token
-- Token must be in `AGENT_TOKENS` comma-separated list
-- Password must match `AUTH_PASSWORD`
+- Agent must send a `--token` matching one of the entries in `AGENT_TOKENS`
+- If `AGENT_TOKENS` is empty on the server, all registrations are rejected (check startup logs for the warning)
 
 ## Dependencies
 
@@ -278,7 +260,6 @@ WS /ws/signaling
 | uvicorn | >=0.24.0 | ASGI server |
 | websockets | >=12.0 | WebSocket support |
 | python-jose | >=3.3.0 | JWT token handling |
-| passlib | >=1.7.4 | Password hashing |
 | google-auth | >=2.23.0 | Google OAuth verification |
 | python-multipart | >=0.0.6 | Form data parsing |
 

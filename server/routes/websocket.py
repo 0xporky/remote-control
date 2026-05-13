@@ -149,18 +149,8 @@ async def websocket_signaling(websocket: WebSocket):
             if msg_type == "register":
                 reg_msg: RegisterMessage = parsed_msg
                 agent_id = reg_msg.agent_id
-                password = reg_msg.password
                 agent_token = reg_msg.token
 
-                # Verify password
-                if password != config.AUTH_PASSWORD:
-                    await websocket.send_json({
-                        "type": "error",
-                        "message": "Invalid password",
-                    })
-                    continue
-
-                # Verify agent token if required
                 if not config.is_valid_agent_token(agent_token):
                     await websocket.send_json({
                         "type": "error",

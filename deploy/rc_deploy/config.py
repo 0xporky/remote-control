@@ -12,7 +12,6 @@ REQUIRED = [
     "DOMAIN",
     "SUBDOMAIN",
     "SECRET_KEY",
-    "AUTH_PASSWORD",
     "GOOGLE_CLIENT_ID",
     "AGENT_TOKENS",
 ]
@@ -36,10 +35,8 @@ class DeployConfig:
     dns_ttl: int
 
     secret_key: str
-    auth_password: str
     google_client_id: str
     agent_tokens: str
-    agent_token_required: bool
     google_allowed_emails: str
     google_allowed_domains: str
     access_token_expire_minutes: int
@@ -68,10 +65,6 @@ class DeployConfig:
 
 def _expand_key(path_str: str) -> Path:
     return Path(path_str).expanduser()
-
-
-def _parse_bool(val: str) -> bool:
-    return val.strip().lower() in ("1", "true", "yes", "on")
 
 
 def load_config(env_path: Path | None = None) -> DeployConfig:
@@ -114,10 +107,8 @@ def load_config(env_path: Path | None = None) -> DeployConfig:
         subdomain=raw["SUBDOMAIN"].strip(),
         dns_ttl=int(raw.get("DNS_TTL") or 60),
         secret_key=raw["SECRET_KEY"],
-        auth_password=raw["AUTH_PASSWORD"],
         google_client_id=raw["GOOGLE_CLIENT_ID"].strip(),
         agent_tokens=raw["AGENT_TOKENS"],
-        agent_token_required=_parse_bool(raw.get("AGENT_TOKEN_REQUIRED") or "true"),
         google_allowed_emails=raw.get("GOOGLE_ALLOWED_EMAILS") or "",
         google_allowed_domains=raw.get("GOOGLE_ALLOWED_DOMAINS") or "",
         access_token_expire_minutes=int(raw.get("ACCESS_TOKEN_EXPIRE_MINUTES") or 60),

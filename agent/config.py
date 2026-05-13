@@ -5,9 +5,8 @@ from typing import Optional
 
 # Default settings
 DEFAULT_SERVER_URL: str = os.getenv("SERVER_URL", "ws://localhost:8000/ws/signaling")
-DEFAULT_PASSWORD: str = os.getenv("AGENT_PASSWORD", "admin")
 DEFAULT_AGENT_ID: str = os.getenv("AGENT_ID", socket.gethostname())
-DEFAULT_AGENT_TOKEN: Optional[str] = os.getenv("AGENT_TOKEN")  # Authorization token
+DEFAULT_AGENT_TOKEN: Optional[str] = os.getenv("AGENT_TOKEN")  # Authorization token (required)
 
 # Reconnection settings
 RECONNECT_DELAY: int = 5  # seconds
@@ -25,7 +24,6 @@ class Config:
     def __init__(
         self,
         server_url: str = DEFAULT_SERVER_URL,
-        password: str = DEFAULT_PASSWORD,
         agent_id: str = DEFAULT_AGENT_ID,
         agent_token: Optional[str] = DEFAULT_AGENT_TOKEN,
         monitor: int = DEFAULT_MONITOR,
@@ -33,7 +31,6 @@ class Config:
         scale: float = DEFAULT_SCALE,
     ):
         self.server_url = server_url
-        self.password = password
         self.agent_id = agent_id
         self.agent_token = agent_token
         self.monitor = monitor
@@ -52,11 +49,6 @@ class Config:
             help=f"Server WebSocket URL (default: {DEFAULT_SERVER_URL})"
         )
         parser.add_argument(
-            "--password", "-p",
-            default=DEFAULT_PASSWORD,
-            help="Authentication password"
-        )
-        parser.add_argument(
             "--agent-id", "-i",
             default=DEFAULT_AGENT_ID,
             help=f"Agent ID (default: {DEFAULT_AGENT_ID})"
@@ -64,7 +56,7 @@ class Config:
         parser.add_argument(
             "--token", "-t",
             default=DEFAULT_AGENT_TOKEN,
-            help="Agent authorization token (required if server has AGENT_TOKEN_REQUIRED=true)"
+            help="Agent authorization token (required; or set AGENT_TOKEN env var)"
         )
         parser.add_argument(
             "--monitor", "-m",
@@ -87,9 +79,11 @@ class Config:
 
         args = parser.parse_args()
 
+        if not args.token:
+            raise SystemExit("--token (or AGENT_TOKEN env var) is required")
+
         return cls(
             server_url=args.server,
-            password=args.password,
             agent_id=args.agent_id,
             agent_token=args.token,
             monitor=args.monitor,

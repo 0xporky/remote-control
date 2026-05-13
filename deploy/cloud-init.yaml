@@ -34,7 +34,7 @@ runcmd:
   - chmod 600 /home/rc/.ssh/authorized_keys
   - chown -R rc:rc /home/rc/.ssh
 
-  # 1 GiB swap — the build step can briefly spike memory on an s-1vcpu-1gb droplet.
+  # 1 GiB swap - the build step can briefly spike memory on an s-1vcpu-1gb droplet.
   - fallocate -l 1G /swapfile
   - chmod 600 /swapfile
   - mkswap /swapfile

@@ -1,6 +1,9 @@
+import logging
 import os
 import secrets
 from typing import Optional
+
+logger = logging.getLogger(__name__)
 
 # Server settings
 HOST: str = os.getenv("HOST", "0.0.0.0")
@@ -16,18 +19,14 @@ SECRET_KEY: str = os.getenv("SECRET_KEY", "change-this-in-production-use-a-stron
 ALGORITHM: str = "HS256"
 ACCESS_TOKEN_EXPIRE_MINUTES: int = int(os.getenv("ACCESS_TOKEN_EXPIRE_MINUTES", "60"))
 
-# Password for authentication (should be set via environment variable in production)
-# This is the password users will enter to access the remote desktop
-AUTH_PASSWORD: Optional[str] = os.getenv("AUTH_PASSWORD", "admin")
-
 # Agent authorization tokens (comma-separated list of valid tokens)
 # Agents must provide one of these tokens to register
 # Generate tokens with: python -c "import secrets; print(secrets.token_urlsafe(32))"
 AGENT_TOKENS: list[str] = [
     t.strip() for t in os.getenv("AGENT_TOKENS", "").split(",") if t.strip()
 ]
-# If no tokens configured, allow any agent (for development)
-AGENT_TOKEN_REQUIRED: bool = os.getenv("AGENT_TOKEN_REQUIRED", "false").lower() == "true"
+if not AGENT_TOKENS:
+    logger.error("AGENT_TOKENS is empty — no agents will be able to register")
 
 # Rate limiting settings
 RATE_LIMIT_LOGIN_MAX_ATTEMPTS: int = int(os.getenv("RATE_LIMIT_LOGIN_MAX_ATTEMPTS", "5"))
@@ -66,8 +65,6 @@ def generate_agent_token() -> str:
 
 def is_valid_agent_token(token: Optional[str]) -> bool:
     """Check if an agent token is valid."""
-    if not AGENT_TOKEN_REQUIRED:
-        return True
     if not token:
         return False
     return token in AGENT_TOKENS

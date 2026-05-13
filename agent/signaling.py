@@ -68,11 +68,8 @@ class SignalingClient:
             register_msg = {
                 "type": "register",
                 "agent_id": self.config.agent_id,
-                "password": self.config.password,
+                "token": self.config.agent_token,
             }
-            # Include token if provided
-            if self.config.agent_token:
-                register_msg["token"] = self.config.agent_token
 
             # Send registration message
             await self.websocket.send(json.dumps(register_msg))

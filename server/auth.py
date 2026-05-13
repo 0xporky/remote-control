@@ -4,15 +4,11 @@ from typing import Optional
 from fastapi import Depends, HTTPException, status
 from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
 from jose import JWTError, jwt
-from passlib.context import CryptContext
 from pydantic import BaseModel
 from google.oauth2 import id_token
 from google.auth.transport import requests as google_requests
 
 import config
-
-# Password hashing context
-pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
 
 # HTTP Bearer token scheme
 security = HTTPBearer()
@@ -27,22 +23,8 @@ class TokenData(BaseModel):
     username: Optional[str] = None
 
 
-class LoginRequest(BaseModel):
-    password: str
-
-
 class GoogleLoginRequest(BaseModel):
     credential: str  # The Google ID token
-
-
-def verify_password(plain_password: str, hashed_password: str) -> bool:
-    """Verify a plain password against a hashed password."""
-    return pwd_context.verify(plain_password, hashed_password)
-
-
-def get_password_hash(password: str) -> str:
-    """Hash a password for storage."""
-    return pwd_context.hash(password)
 
 
 def create_access_token(data: dict, expires_delta: Optional[timedelta] = None) -> str:
@@ -81,13 +63,6 @@ async def get_current_user(credentials: HTTPAuthorizationCredentials = Depends(s
     if token_data is None:
         raise credentials_exception
     return token_data
-
-
-def authenticate(password: str) -> bool:
-    """Authenticate using the configured password."""
-    if config.AUTH_PASSWORD is None:
-        return False
-    return password == config.AUTH_PASSWORD
 
 
 def verify_google_token(token: str) -> Optional[dict]:

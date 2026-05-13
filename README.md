@@ -53,7 +53,7 @@ export PKG_CONFIG_PATH="/opt/homebrew/opt/ffmpeg@7/lib/pkgconfig"
 cd agent
 python -m venv venv && source venv/bin/activate
 pip install -r requirements.txt
-python main.py --server ws://localhost:8000/ws/signaling --password admin
+python main.py --server ws://localhost:8000/ws/signaling --token "$AGENT_TOKEN"
 ```
 
 On first run:
@@ -61,7 +61,7 @@ On first run:
 - **Linux** — add your user to the `input` group if input doesn't work.
 - **Windows** — admin terminal may be needed for input injection.
 
-Open the web client, log in with the password (default `admin`), and select the agent to begin a session.
+Open the web client, sign in with Google, and select the agent to begin a session.
 
 ## Features
 
@@ -83,7 +83,108 @@ All configuration is via environment variables or CLI flags. See each component'
 
 ## Deployment
 
-A deploy script is planned for a future iteration. The server ships a Dockerfile (`server/Dockerfile`) and the web client builds to a static `dist/` folder via `npm run build`.
+The [`deploy/`](deploy/) directory ships an end-to-end pipeline that provisions a DigitalOcean droplet, ships the `server/` and `web/` sources, runs them behind Caddy (TLS via Let's Encrypt), and points a DNS A-record at the new host. Two equivalent frontends are provided:
+
+- `deploy/deploy.py` — Python (3.11+), the canonical implementation. Also importable as `rc_deploy` for embedding (e.g. a Telegram bot).
+- `deploy/up.sh` / `deploy/down.sh` — bash equivalents.
+
+### Setup
+
+**1. Install local tools.** All scripts call out to these:
+
+```bash
+# macOS:
+brew install doctl jq rsync
+# (ssh and curl ship with the OS)
+
+# Debian/Ubuntu:
+sudo snap install doctl
+sudo apt install jq rsync openssh-client curl
+```
+
+**2. Authenticate `doctl`.** Create a token at <https://cloud.digitalocean.com/account/api/tokens> with read+write scopes for droplets and domains, then:
+
+```bash
+doctl auth init       # paste the token when prompted
+doctl account get     # sanity check
+```
+
+**3. Register an SSH key with DigitalOcean.** The droplet's `rc` user is provisioned with this key by `cloud-init.yaml`.
+
+```bash
+# Upload an existing public key:
+doctl compute ssh-key import my-key --public-key-file ~/.ssh/id_ed25519.pub
+
+# List keys to get the fingerprint for DO_SSH_KEY_FINGERPRINT:
+doctl compute ssh-key list
+```
+
+**4. Point a domain at DigitalOcean DNS.** The domain must already be managed by DO (the scripts create/update an A-record under it, they do not register the domain itself).
+
+```bash
+doctl compute domain list
+# If your domain isn't listed, add it and update its NS records at the registrar:
+doctl compute domain create example.com
+```
+
+**5. Set up the `.env` file.**
+
+```bash
+cd deploy
+cp .env.example .env
+```
+
+Required fields (the config loader rejects missing values and `CHANGE_ME*` placeholders):
+
+| Var | How to obtain |
+| --- | --- |
+| `DO_API_TOKEN` | Step 2 above |
+| `DO_REGION` / `DO_SIZE` / `DO_IMAGE` | Defaults in `.env.example` work; list options with `doctl compute region list`, `doctl compute size list`, `doctl compute image list-distribution` |
+| `DO_SSH_KEY_FINGERPRINT` | `doctl compute ssh-key list` |
+| `SSH_PRIVATE_KEY` | Local path to the matching private key (default `~/.ssh/id_ed25519`) |
+| `DOMAIN` / `SUBDOMAIN` | The A-record will be `SUBDOMAIN.DOMAIN` |
+| `SECRET_KEY` | `python -c "import secrets; print(secrets.token_urlsafe(64))"` |
+| `AGENT_TOKENS` | `python -c "import secrets; print(secrets.token_urlsafe(32))"` — comma-separated list. Each agent registers with one of these via `--token`. |
+| `GOOGLE_CLIENT_ID` | OAuth client ID from Google Cloud Console (see `GOOGLE_OAUTH.md` if present) |
+| `GOOGLE_ALLOWED_EMAILS` / `GOOGLE_ALLOWED_DOMAINS` | Optional allowlists |
+
+**6. (Python entrypoint only) install its deps.** Requires Python 3.11+.
+
+```bash
+python3.11 -m venv deploy/.venv
+source deploy/.venv/bin/activate
+pip install -r deploy/requirements.txt
+```
+
+The bash scripts (`up.sh` / `down.sh`) have no Python dependency and work out of the box once steps 1–5 are done.
+
+### Bring the stack up
+
+```bash
+# Python:
+python deploy/deploy.py up
+
+# or bash:
+./deploy/up.sh
+```
+
+This creates a droplet, writes `deploy/.state.json` (droplet id, IP, FQDN), upserts the `SUBDOMAIN.DOMAIN` A-record, waits for SSH and cloud-init, rsyncs `server/` + `web/` + `docker-compose.yml` + `Caddyfile`, renders a minimal `.env` on the droplet, and runs `docker compose up -d --build`. It finishes by polling `https://FQDN/api/health` until TLS is issued.
+
+### Tear the stack down
+
+```bash
+python deploy/deploy.py down              # destroy droplet, keep DNS
+python deploy/deploy.py down --clear-dns  # destroy droplet and delete A-record
+# or: ./deploy/down.sh [--clear-dns]
+```
+
+This attempts a best-effort `docker compose down`, destroys the droplet tracked in `deploy/.state.json`, optionally removes the A-record, and clears the state file so `up` can run again.
+
+### Notes
+
+- `deploy/.state.json` is the single source of truth for "is a droplet running?". Delete it manually only if you know it's stale — otherwise `up` will refuse to create a second droplet.
+- The droplet's `~/app/.env` is regenerated on every `up` from a subset of `deploy/.env` (auth/OAuth/session vars only). DigitalOcean/SSH vars are never shipped to the droplet.
+- STUN-only — see the note below.
 
 ## Documentation
 

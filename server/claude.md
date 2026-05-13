@@ -120,22 +120,6 @@ class Connection:
 
 ## Authentication Flows
 
-### Password Authentication
-
-```
-Client                          Server
-   │                               │
-   │ POST /api/auth/login          │
-   │ {"password": "secret"}        │
-   │──────────────────────────────>│
-   │                               │ 1. Check rate limit (IP)
-   │                               │ 2. Verify password == AUTH_PASSWORD
-   │                               │ 3. Record attempt (success/fail)
-   │                               │ 4. Generate JWT token
-   │ {"access_token": "eyJ..."}    │
-   │<──────────────────────────────│
-```
-
 ### Google OAuth Authentication
 
 ```
@@ -195,12 +179,10 @@ Agent                           Server
    │                               │
    │ {"type": "register",          │
    │  "agent_id": "workstation-1", │
-   │  "password": "secret",        │
    │  "token": "agent-token"}      │
    │──────────────────────────────>│
-   │                               │ 1. Verify password
-   │                               │ 2. Verify token (if required)
-   │                               │ 3. Register in ConnectionManager
+   │                               │ 1. Verify token in AGENT_TOKENS
+   │                               │ 2. Register in ConnectionManager
    │ {"type": "registered"}        │
    │<──────────────────────────────│
 ```
@@ -303,7 +285,6 @@ Browser → WebRTC Data Channel → Agent → pynput → OS
 | `uvicorn[standard]` | >=0.24.0 | ASGI server with WebSocket support |
 | `websockets` | >=12.0 | WebSocket protocol implementation |
 | `python-jose[cryptography]` | >=3.3.0 | JWT token creation/verification |
-| `passlib[bcrypt]` | >=1.7.4 | Secure password hashing |
 | `python-multipart` | >=0.0.6 | Multipart form data parsing |
 | `google-auth` | >=2.23.0 | Google ID token verification |
 
@@ -366,11 +347,10 @@ websockets.exceptions.ConnectionClosed
 
 **5. Agent Registration Fails**
 ```
-{"type": "error", "message": "Invalid agent token"}
+{"type": "error", "message": "Invalid or missing agent token"}
 ```
-- If `AGENT_TOKEN_REQUIRED=true`, token must be provided
-- Token must be in `AGENT_TOKENS` list
-- Password must match `AUTH_PASSWORD`
+- Token must be in the server's `AGENT_TOKENS` list
+- If `AGENT_TOKENS` is empty on the server, all registrations are rejected (check startup logs)
 
 ### Testing Individual Components
 
@@ -378,11 +358,6 @@ websockets.exceptions.ConnectionClosed
 ```bash
 # Health check
 curl http://localhost:8000/api/health
-
-# Password login
-curl -X POST http://localhost:8000/api/auth/login \
-  -H "Content-Type: application/json" \
-  -d '{"password": "admin"}'
 
 # Generate agent token
 curl http://localhost:8000/api/generate-agent-token
@@ -424,9 +399,7 @@ asyncio.run(test())
 | `SSL_CERTFILE` | str | None | Path to SSL certificate |
 | `SECRET_KEY` | str | `change-this...` | JWT signing key |
 | `ACCESS_TOKEN_EXPIRE_MINUTES` | int | `60` | JWT lifetime |
-| `AUTH_PASSWORD` | str | `admin` | Client authentication password |
-| `AGENT_TOKENS` | str | None | Comma-separated agent tokens |
-| `AGENT_TOKEN_REQUIRED` | bool | `false` | Require agent token |
+| `AGENT_TOKENS` | str | None | Comma-separated agent tokens (required — empty rejects all) |
 | `RATE_LIMIT_LOGIN_MAX_ATTEMPTS` | int | `5` | Max login attempts |
 | `RATE_LIMIT_LOGIN_WINDOW_SECONDS` | int | `60` | Attempt window |
 | `RATE_LIMIT_LOGIN_LOCKOUT_SECONDS` | int | `300` | Lockout duration |

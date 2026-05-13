@@ -17,8 +17,7 @@ class RegisterMessage(BaseModel):
     """Agent registration message."""
     type: Literal["register"]
     agent_id: str = Field(..., min_length=1, max_length=64)
-    password: str = Field(..., min_length=1, max_length=128)
-    token: Optional[str] = Field(None, max_length=256)  # Agent authorization token
+    token: str = Field(..., min_length=1, max_length=256)  # Agent authorization token
 
     @field_validator("agent_id")
     @classmethod

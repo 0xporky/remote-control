@@ -43,7 +43,7 @@ require() {
 	[[ -n "$val" && "$val" != CHANGE_ME* ]] || err "Required var $name is missing or still a placeholder in $ENV_FILE."
 }
 for v in DO_API_TOKEN DO_REGION DO_SIZE DO_IMAGE DO_SSH_KEY_FINGERPRINT \
-	 DOMAIN SUBDOMAIN SECRET_KEY AUTH_PASSWORD GOOGLE_CLIENT_ID; do
+	 DOMAIN SUBDOMAIN SECRET_KEY GOOGLE_CLIENT_ID AGENT_TOKENS; do
 	require "$v"
 done
 
@@ -160,7 +160,7 @@ trap 'rm -f "$REMOTE_ENV"' EXIT
 # Pass through only the vars docker-compose.yml references. Drop DO_* / SSH_* etc.
 {
 	echo "FQDN=$FQDN"
-	for key in SECRET_KEY AUTH_PASSWORD AGENT_TOKEN_REQUIRED AGENT_TOKENS \
+	for key in SECRET_KEY AGENT_TOKENS \
 		   GOOGLE_CLIENT_ID GOOGLE_ALLOWED_EMAILS GOOGLE_ALLOWED_DOMAINS \
 		   ACCESS_TOKEN_EXPIRE_MINUTES WS_SESSION_TIMEOUT_SECONDS; do
 		val="${!key:-}"
@@ -193,7 +193,7 @@ cat <<EOF
 ✓ Deployment complete.
 
   URL:     https://$FQDN
-  Agent:   python agent/main.py --server wss://$FQDN/ws/signaling --password '\$AUTH_PASSWORD' --token '\$AGENT_TOKEN'
+  Agent:   python agent/main.py --server wss://$FQDN/ws/signaling --token '\$AGENT_TOKEN'
   SSH:     ssh -i $SSH_KEY rc@$DROPLET_IP
   Logs:    ssh -i $SSH_KEY rc@$DROPLET_IP 'cd app && docker compose logs -f'
 

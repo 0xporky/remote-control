@@ -96,7 +96,10 @@ async def rsync(
     cmd += ["-e", _rsync_ssh_arg(key)]
     for pattern in excludes:
         cmd += ["--exclude", pattern]
-    cmd += [str(src), dst]
+    # Append trailing slash on directories so rsync copies *contents* into dst
+    # (Path() strips trailing slashes from the call site, so we re-add it here).
+    src_str = f"{src}/" if src.is_dir() else str(src)
+    cmd += [src_str, dst]
     result = await _run(cmd, timeout=timeout)
     if result.returncode != 0:
         raise SSHError(cmd, result)

@@ -181,7 +181,7 @@ Special keys supported: Shift, Control, Alt, Meta, Arrow keys, F1-F12, Enter, Ta
        ↓
 3. Server sends: {"type": "connected", "connection_id": "..."}
        ↓
-4. SignalingClient.register() → {"type": "register", "agent_id": "...", "password": "..."}
+4. SignalingClient.register() → {"type": "register", "agent_id": "...", "token": "..."}
        ↓
 5. Server sends: {"type": "registered"}
        ↓
@@ -306,7 +306,7 @@ from signaling import SignalingClient
 from config import Config
 
 async def test():
-    config = Config(server_url="ws://localhost:8000/ws/signaling", password="admin")
+    config = Config(server_url="ws://localhost:8000/ws/signaling", agent_token="test-token")
     client = SignalingClient(config)
     await client.connect()
     await client.register()
@@ -322,9 +322,8 @@ asyncio.run(test())
 | Property | Type | Default | Source |
 |----------|------|---------|--------|
 | `server_url` | str | `ws://localhost:8000/ws/signaling` | `--server` / `SERVER_URL` |
-| `password` | str | `admin` | `--password` / `AGENT_PASSWORD` |
 | `agent_id` | str | hostname | `--agent-id` / `AGENT_ID` |
-| `agent_token` | Optional[str] | None | `--token` / `AGENT_TOKEN` |
+| `agent_token` | Optional[str] | None | `--token` / `AGENT_TOKEN` (required at startup) |
 | `monitor` | int | 1 | `--monitor` |
 | `fps` | int | 30 | `--fps` |
 | `scale` | float | 1.0 | `--scale` |

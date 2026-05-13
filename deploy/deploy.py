@@ -70,8 +70,9 @@ def main() -> None:
     )
     down_cmd.add_argument(
         "--clear-dns",
-        action="store_true",
-        help="Also delete the A-record from DigitalOcean DNS.",
+        action=argparse.BooleanOptionalAction,
+        default=True,
+        help="Also delete the A-record from DigitalOcean DNS (default: on; pass --no-clear-dns to keep it).",
     )
 
     args = parser.parse_args()

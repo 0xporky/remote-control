@@ -27,8 +27,16 @@ brew install ffmpeg@7
 export PKG_CONFIG_PATH="/opt/homebrew/opt/ffmpeg@7/lib/pkgconfig"
 ```
 
-**Windows:**
-Download ffmpeg from https://ffmpeg.org/download.html and add to PATH.
+**Windows (winget):**
+```powershell
+winget install --id=Gyan.FFmpeg -e
+# Or with Chocolatey:
+# choco install ffmpeg
+# Verify:
+ffmpeg -version
+```
+
+If installing manually, download a build from https://www.gyan.dev/ffmpeg/builds/ and add its `bin\` directory to the `Path` environment variable.
 
 **Linux (Ubuntu/Debian):**
 ```bash
@@ -60,18 +68,16 @@ pip install -r requirements.txt
 | Variable | Description | Default |
 |----------|-------------|---------|
 | `SERVER_URL` | WebSocket signaling server URL | `ws://localhost:8000/ws/signaling` |
-| `AGENT_PASSWORD` | Authentication password | `admin` |
 | `AGENT_ID` | Unique agent identifier | System hostname |
-| `AGENT_TOKEN` | Authorization token (if server requires) | None |
+| `AGENT_TOKEN` | Authorization token (required) — must match an entry in the server's `AGENT_TOKENS` | None |
 
 ### Command-Line Arguments
 
 | Argument | Short | Description | Default |
 |----------|-------|-------------|---------|
 | `--server` | `-s` | Server WebSocket URL | `ws://localhost:8000/ws/signaling` |
-| `--password` | `-p` | Authentication password | `admin` |
 | `--agent-id` | `-i` | Agent identifier | System hostname |
-| `--token` | `-t` | Authorization token | None |
+| `--token` | `-t` | Authorization token (required) | None |
 | `--monitor` | `-m` | Monitor number (1=primary) | `1` |
 | `--fps` | `-f` | Target frames per second | `30` |
 | `--scale` | | Resolution scale factor | `1.0` |
@@ -80,30 +86,63 @@ pip install -r requirements.txt
 
 ### Basic Usage
 
+**macOS / Linux:**
 ```bash
-python main.py --server ws://server:8000/ws/signaling --password yourpassword
+source venv/bin/activate
+python main.py --server ws://server:8000/ws/signaling --token "$AGENT_TOKEN"
+```
+
+**Windows (PowerShell):**
+```powershell
+venv\Scripts\Activate.ps1
+python main.py --server ws://server:8000/ws/signaling --token $env:AGENT_TOKEN
+```
+
+**Windows (cmd.exe):**
+```cmd
+venv\Scripts\activate.bat
+python main.py --server ws://server:8000/ws/signaling --token %AGENT_TOKEN%
 ```
 
 ### Examples
 
-**Custom agent ID:**
+**Custom agent ID**
+
 ```bash
-python main.py -s ws://server:8000/ws/signaling -p secret -i workstation-1
+python main.py -s ws://server:8000/ws/signaling -t "$AGENT_TOKEN" -i workstation-1
 ```
 
-**Capture secondary monitor:**
+**Capture secondary monitor**
+
 ```bash
-python main.py -s ws://server:8000/ws/signaling -p secret --monitor 2
+python main.py -s ws://server:8000/ws/signaling -t "$AGENT_TOKEN" --monitor 2
 ```
 
-**Performance tuning (lower bandwidth):**
+**Performance tuning (lower bandwidth)**
+
 ```bash
-python main.py -s ws://server:8000/ws/signaling -p secret --fps 15 --scale 0.75
+python main.py -s ws://server:8000/ws/signaling -t "$AGENT_TOKEN" --fps 15 --scale 0.75
 ```
 
-**Production with SSL:**
+**Production with SSL**
+
 ```bash
-python main.py -s wss://remote.example.com/ws/signaling -p secret --token auth_token_here
+python main.py -s wss://remote.example.com/ws/signaling -t "$AGENT_TOKEN"
+```
+
+**Run via environment variables** (no CLI flags)
+
+macOS / Linux:
+```bash
+export SERVER_URL=wss://remote.example.com/ws/signaling
+export AGENT_TOKEN=auth_token_here
+python main.py
+```
+Windows (PowerShell):
+```powershell
+$env:SERVER_URL  = "wss://remote.example.com/ws/signaling"
+$env:AGENT_TOKEN = "auth_token_here"
+python main.py
 ```
 
 ### List Available Monitors

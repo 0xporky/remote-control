@@ -55,10 +55,10 @@ Requires **ffmpeg@7** on PATH before `pip install` (PyAV links against it). macO
 ```bash
 python -m venv venv && source venv/bin/activate
 pip install -r requirements.txt
-python main.py --server ws://localhost:8000/ws/signaling --password admin
+python main.py --server ws://localhost:8000/ws/signaling --token "$AGENT_TOKEN"
 ```
 
-CLI flags: `--server/-s`, `--password/-p`, `--agent-id/-i`, `--token/-t`, `--monitor/-m`, `--fps/-f`, `--scale`. Env vars: `SERVER_URL`, `AGENT_PASSWORD`, `AGENT_ID`, `AGENT_TOKEN`.
+CLI flags: `--server/-s`, `--agent-id/-i`, `--token/-t` (required), `--monitor/-m`, `--fps/-f`, `--scale`. Env vars: `SERVER_URL`, `AGENT_ID`, `AGENT_TOKEN`.
 
 Platform notes: macOS needs Accessibility permission for `pynput` input injection; Linux may need the user in the `input` group; Windows may need admin terminal.
 
@@ -68,7 +68,7 @@ Changes to any of these touch all three components — update all of them togeth
 
 - **Signaling message schema** — Pydantic models in `server/messages.py` are the source of truth. `agent/signaling.py` and `web/src/services/signaling.ts` must match. Message types: `authenticate`, `authenticated`, `register`, `registered`, `list-agents`/`get-agents`, `agent-list`/`agents-list`, `offer`, `answer`, `ice-candidate`, `error`.
 - **Input event schema** — browser → agent over WebRTC data channel `"input"`. Types: `mousemove` (dx/dy, Pointer Lock relative), `mousedown`/`mouseup` (button 0/1/2), `wheel` (deltaX/deltaY), `keydown`/`keyup` (key + code). Defined in `web/src/types/index.ts`, handled in `agent/input_handler.py`.
-- **Auth** — server issues JWT via `SECRET_KEY`; both password and Google OAuth paths produce the same token. Browser sends it in the `authenticate` WS message. Agents register with `AUTH_PASSWORD` plus optional `AGENT_TOKEN` (required if `AGENT_TOKEN_REQUIRED=true`).
+- **Auth** — server issues JWT via `SECRET_KEY`. Browsers sign in with Google OAuth (`/api/auth/google`) and send the JWT in the `authenticate` WS message. Agents register with a token from `AGENT_TOKENS` (required, no shared password).
 - **STUN servers** — hardcoded as `stun.l.google.com:19302` and `stun1.l.google.com:19302` in both `agent/webrtc_client.py` and `web/src/services/webrtc.ts`. No TURN configured; behind strict NAT, ICE will fail.
 
 ## Deployment Notes (see DEPLOY.md)

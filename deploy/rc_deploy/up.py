@@ -25,8 +25,6 @@ def _render_remote_env(config: DeployConfig) -> str:
     lines = [
         f"FQDN={config.fqdn}",
         f"SECRET_KEY={config.secret_key}",
-        f"AUTH_PASSWORD={config.auth_password}",
-        f"AGENT_TOKEN_REQUIRED={'true' if config.agent_token_required else 'false'}",
         f"AGENT_TOKENS={config.agent_tokens}",
         f"GOOGLE_CLIENT_ID={config.google_client_id}",
         f"GOOGLE_ALLOWED_EMAILS={config.google_allowed_emails}",
