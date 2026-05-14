@@ -65,6 +65,33 @@ if [[ -f "$STATE_FILE" ]]; then
 	fi
 fi
 
+# ── Cleanup trap: drop the firewall if up.sh dies before completing ──
+UP_SUCCESS=0
+REMOTE_ENV=""
+FIREWALL_ID=""
+cleanup() {
+	[[ -n "$REMOTE_ENV" ]] && rm -f "$REMOTE_ENV"
+	if [[ -n "$FIREWALL_ID" && "$UP_SUCCESS" -ne 1 ]]; then
+		warn "up.sh failed — deleting orphan firewall $FIREWALL_ID."
+		doctl compute firewall delete "$FIREWALL_ID" --force >/dev/null 2>&1 || true
+	fi
+}
+trap cleanup EXIT
+
+# ── Create cloud firewall (22/80/443; 8000 intentionally NOT exposed) ─
+FW_NAME="rc-fw-$(date -u +%Y%m%d-%H%M%S)"
+log "Creating cloud firewall $FW_NAME (TCP 22/80/443 in, all out)..."
+
+FIREWALL_ID=$(doctl compute firewall create \
+	--name "$FW_NAME" \
+	--inbound-rules "protocol:tcp,ports:22,address:0.0.0.0/0,address:::/0 protocol:tcp,ports:80,address:0.0.0.0/0,address:::/0 protocol:tcp,ports:443,address:0.0.0.0/0,address:::/0" \
+	--outbound-rules "protocol:tcp,ports:all,address:0.0.0.0/0,address:::/0 protocol:udp,ports:all,address:0.0.0.0/0,address:::/0 protocol:icmp,address:0.0.0.0/0,address:::/0" \
+	--output json \
+	| jq -r '.[0].id')
+
+[[ -n "$FIREWALL_ID" && "$FIREWALL_ID" != "null" ]] || err "Failed to create firewall."
+log "Firewall created: id=$FIREWALL_ID"
+
 # ── Provision droplet ─────────────────────────────────────────────────
 DROPLET_NAME="rc-$(date -u +%Y%m%d-%H%M%S)"
 log "Creating droplet $DROPLET_NAME ($DO_SIZE in $DO_REGION)..."
@@ -86,8 +113,14 @@ DROPLET_IP=$(echo "$CREATE_OUT" | jq -r '.[0].networks.v4[] | select(.type=="pub
 
 log "Droplet ready: id=$DROPLET_ID ip=$DROPLET_IP"
 
-jq -n --arg id "$DROPLET_ID" --arg ip "$DROPLET_IP" --arg name "$DROPLET_NAME" --arg fqdn "$FQDN" \
-	'{droplet_id: $id, ip: $ip, name: $name, fqdn: $fqdn}' > "$STATE_FILE"
+# ── Attach droplet to firewall ────────────────────────────────────────
+log "Attaching droplet to firewall..."
+doctl compute firewall add-droplets "$FIREWALL_ID" --droplet-ids "$DROPLET_ID" >/dev/null \
+	|| err "Failed to attach droplet $DROPLET_ID to firewall $FIREWALL_ID."
+
+jq -n --arg id "$DROPLET_ID" --arg ip "$DROPLET_IP" --arg name "$DROPLET_NAME" \
+	--arg fqdn "$FQDN" --arg fw "$FIREWALL_ID" \
+	'{droplet_id: $id, ip: $ip, name: $name, fqdn: $fqdn, firewall_id: $fw}' > "$STATE_FILE"
 
 # ── Update DNS ────────────────────────────────────────────────────────
 log "Updating DNS: $FQDN → $DROPLET_IP (TTL ${DNS_TTL:-60})..."
@@ -155,7 +188,6 @@ rsync -a -e "$RSYNC_SSH" \
 
 # ── Ship .env with FQDN substituted in ────────────────────────────────
 REMOTE_ENV=$(mktemp)
-trap 'rm -f "$REMOTE_ENV"' EXIT
 
 # Pass through only the vars docker-compose.yml references. Drop DO_* / SSH_* etc.
 {
@@ -199,3 +231,5 @@ cat <<EOF
 
 Spin down with: ./deploy/down.sh
 EOF
+
+UP_SUCCESS=1

@@ -36,6 +36,7 @@ export DIGITALOCEAN_ACCESS_TOKEN="$DO_API_TOKEN"
 
 DROPLET_ID=$(jq -r '.droplet_id // empty' "$STATE_FILE")
 DROPLET_IP=$(jq -r '.ip // empty' "$STATE_FILE")
+FIREWALL_ID=$(jq -r '.firewall_id // empty' "$STATE_FILE")
 [[ -n "$DROPLET_ID" ]] || err "droplet_id missing from state file."
 
 # ── Graceful stop (best effort, don't block) ──────────────────────────
@@ -55,6 +56,13 @@ fi
 log "Destroying droplet $DROPLET_ID..."
 doctl compute droplet delete "$DROPLET_ID" --force >/dev/null
 log "Droplet destroyed."
+
+# ── Destroy firewall ──────────────────────────────────────────────────
+if [[ -n "$FIREWALL_ID" ]]; then
+	log "Destroying firewall $FIREWALL_ID..."
+	doctl compute firewall delete "$FIREWALL_ID" --force >/dev/null \
+		|| warn "Failed to delete firewall $FIREWALL_ID (may already be gone)."
+fi
 
 # ── Optional: clear DNS record ────────────────────────────────────────
 if $CLEAR_DNS; then
