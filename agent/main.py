@@ -42,8 +42,12 @@ class Agent:
             turn_ttl=config.turn_ttl,
         )
 
-        # Initialize input handler for mouse/keyboard injection
-        self.input_handler = InputHandler()
+        # Initialize input handler for mouse/keyboard injection.
+        # Pass a monitor-info getter so touch-based clients can send
+        # normalized coordinates that resolve to the live monitor rect.
+        self.input_handler = InputHandler(
+            get_monitor_info=lambda: self.screen_capture.monitor_info,
+        )
 
         # Connect input handler to WebRTC client
         self.webrtc.set_input_handler(self.input_handler.handle_input)

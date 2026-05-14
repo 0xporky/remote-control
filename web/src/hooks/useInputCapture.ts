@@ -131,6 +131,81 @@ export function useInputCapture({
       }
     };
 
+    // Convert a touch's client coordinates into normalized (0..1) coords
+    // within the actual displayed video area, accounting for object-fit
+    // letterboxing. Returns null if the touch is outside the video.
+    const getNormalizedTouchCoords = (
+      clientX: number,
+      clientY: number,
+    ): { nx: number; ny: number } | null => {
+      const rect = video.getBoundingClientRect();
+      const vw = video.videoWidth;
+      const vh = video.videoHeight;
+      if (!vw || !vh || !rect.width || !rect.height) return null;
+
+      const elemAspect = rect.width / rect.height;
+      const videoAspect = vw / vh;
+
+      let displayedW: number;
+      let displayedH: number;
+      let offsetX: number;
+      let offsetY: number;
+      if (videoAspect > elemAspect) {
+        displayedW = rect.width;
+        displayedH = rect.width / videoAspect;
+        offsetX = 0;
+        offsetY = (rect.height - displayedH) / 2;
+      } else {
+        displayedH = rect.height;
+        displayedW = rect.height * videoAspect;
+        offsetX = (rect.width - displayedW) / 2;
+        offsetY = 0;
+      }
+
+      const x = clientX - rect.left - offsetX;
+      const y = clientY - rect.top - offsetY;
+      if (x < 0 || x > displayedW || y < 0 || y > displayedH) return null;
+      return { nx: x / displayedW, ny: y / displayedH };
+    };
+
+    // Touch handlers. Single-finger touch is treated as left-button input:
+    // touchstart positions the cursor + presses, touchmove drags,
+    // touchend releases. Multi-touch is ignored to avoid spurious clicks.
+    let touchActive = false;
+
+    const handleTouchStart = (e: TouchEvent) => {
+      if (e.touches.length !== 1) return;
+      const t = e.touches[0];
+      const coords = getNormalizedTouchCoords(t.clientX, t.clientY);
+      if (!coords) return;
+      e.preventDefault();
+      touchActive = true;
+      onInput({ type: 'mouseabs', nx: coords.nx, ny: coords.ny });
+      onInput({ type: 'mousedown', button: 0 });
+    };
+
+    const handleTouchMove = (e: TouchEvent) => {
+      if (!touchActive || e.touches.length !== 1) return;
+      const t = e.touches[0];
+      const coords = getNormalizedTouchCoords(t.clientX, t.clientY);
+      if (!coords) return;
+      e.preventDefault();
+      onInput({ type: 'mouseabs', nx: coords.nx, ny: coords.ny });
+    };
+
+    const handleTouchEnd = (e: TouchEvent) => {
+      if (!touchActive) return;
+      e.preventDefault();
+      touchActive = false;
+      onInput({ type: 'mouseup', button: 0 });
+    };
+
+    const handleTouchCancel = () => {
+      if (!touchActive) return;
+      touchActive = false;
+      onInput({ type: 'mouseup', button: 0 });
+    };
+
     // Add event listeners
     document.addEventListener('pointerlockchange', handlePointerLockChange);
     document.addEventListener('pointerlockerror', handlePointerLockError);
@@ -141,6 +216,10 @@ export function useInputCapture({
     document.addEventListener('keydown', handleKeyDown);
     document.addEventListener('keyup', handleKeyUp);
     document.addEventListener('contextmenu', handleContextMenu);
+    video.addEventListener('touchstart', handleTouchStart, { passive: false });
+    video.addEventListener('touchmove', handleTouchMove, { passive: false });
+    video.addEventListener('touchend', handleTouchEnd, { passive: false });
+    video.addEventListener('touchcancel', handleTouchCancel);
 
     // Cleanup
     return () => {
@@ -153,6 +232,10 @@ export function useInputCapture({
       document.removeEventListener('keydown', handleKeyDown);
       document.removeEventListener('keyup', handleKeyUp);
       document.removeEventListener('contextmenu', handleContextMenu);
+      video.removeEventListener('touchstart', handleTouchStart);
+      video.removeEventListener('touchmove', handleTouchMove);
+      video.removeEventListener('touchend', handleTouchEnd);
+      video.removeEventListener('touchcancel', handleTouchCancel);
 
       // Release pointer lock on cleanup
       if (document.pointerLockElement === video) {

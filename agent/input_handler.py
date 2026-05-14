@@ -6,7 +6,7 @@ received from the web client via WebRTC data channel.
 """
 
 import logging
-from typing import Dict, Any, Optional
+from typing import Dict, Any, Callable, Optional
 
 from pynput.mouse import Controller as MouseController, Button
 from pynput.keyboard import Controller as KeyboardController, Key
@@ -80,11 +80,19 @@ class InputHandler:
     to actual mouse/keyboard actions using pynput.
     """
 
-    def __init__(self):
-        """Initialize input controllers."""
+    def __init__(self, get_monitor_info: Optional[Callable[[], Dict[str, int]]] = None):
+        """Initialize input controllers.
+
+        Args:
+            get_monitor_info: Optional callable returning the currently captured
+                monitor's geometry (left/top/width/height). Required to map
+                normalized (0..1) coordinates from touch-based clients to
+                absolute screen pixels.
+        """
         self._mouse = MouseController()
         self._keyboard = KeyboardController()
         self._enabled = True
+        self._get_monitor_info = get_monitor_info
 
         # Track pressed keys to handle key release properly
         self._pressed_keys: set = set()
@@ -121,6 +129,8 @@ class InputHandler:
         try:
             if event_type == "mousemove":
                 self._handle_mouse_move(event)
+            elif event_type == "mouseabs":
+                self._handle_mouse_abs(event)
             elif event_type == "mousedown":
                 self._handle_mouse_down(event)
             elif event_type == "mouseup":
@@ -143,6 +153,24 @@ class InputHandler:
 
         if dx != 0 or dy != 0:
             self._mouse.move(dx, dy)
+
+    def _handle_mouse_abs(self, event: Dict[str, Any]):
+        """Handle absolute mouse positioning from normalized (0..1) coords."""
+        if self._get_monitor_info is None:
+            logger.warning("mouseabs received but no monitor info available")
+            return
+
+        nx = event.get("nx")
+        ny = event.get("ny")
+        if nx is None or ny is None:
+            return
+
+        monitor = self._get_monitor_info()
+        nx = max(0.0, min(1.0, float(nx)))
+        ny = max(0.0, min(1.0, float(ny)))
+        x = int(monitor["left"] + nx * monitor["width"])
+        y = int(monitor["top"] + ny * monitor["height"])
+        self._mouse.position = (x, y)
 
     def _handle_mouse_down(self, event: Dict[str, Any]):
         """Handle mouse button press."""

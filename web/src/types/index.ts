@@ -99,6 +99,7 @@ export interface WebRTCState {
 // Input event types (for Step 8)
 export type InputEventType =
   | 'mousemove'
+  | 'mouseabs'
   | 'mousedown'
   | 'mouseup'
   | 'wheel'
@@ -113,6 +114,14 @@ export interface MouseMoveEvent extends BaseInputEvent {
   type: 'mousemove';
   dx: number;
   dy: number;
+}
+
+// Absolute mouse position as fractions of the captured monitor (0..1).
+// Used for touch/tap input where Pointer Lock is unavailable.
+export interface MouseAbsEvent extends BaseInputEvent {
+  type: 'mouseabs';
+  nx: number;
+  ny: number;
 }
 
 export interface MouseButtonEvent extends BaseInputEvent {
@@ -134,6 +143,7 @@ export interface KeyEvent extends BaseInputEvent {
 
 export type InputEvent =
   | MouseMoveEvent
+  | MouseAbsEvent
   | MouseButtonEvent
   | WheelEvent
   | KeyEvent;
