@@ -5,9 +5,23 @@ from typing import Optional, AsyncGenerator
 
 import mss
 import mss.tools
-from PIL import Image
+from PIL import Image, ImageDraw
+from pynput.mouse import Controller as MouseController
 
 logger = logging.getLogger(__name__)
+
+
+# Arrow cursor polygon (points relative to the cursor hotspot at 0,0).
+# Approximates the standard OS pointer.
+_CURSOR_POLYGON = [
+    (0, 0),
+    (0, 16),
+    (4, 12),
+    (7, 18),
+    (9, 17),
+    (6, 11),
+    (11, 11),
+]
 
 
 class ScreenCapture:
@@ -29,6 +43,7 @@ class ScreenCapture:
 
         self._sct: Optional[mss.mss] = None
         self._running = False
+        self._mouse = MouseController()
 
         # Stats
         self._frame_count = 0
@@ -71,6 +86,9 @@ class ScreenCapture:
         # Convert to PIL Image (BGRA -> RGB)
         img = Image.frombytes("RGB", screenshot.size, screenshot.bgra, "raw", "BGRX")
 
+        # mss does not capture the OS cursor; draw a synthetic one.
+        self._draw_cursor(img, monitor)
+
         # Scale if needed
         if self.scale != 1.0:
             new_width = int(img.width * self.scale)
@@ -78,6 +96,23 @@ class ScreenCapture:
             img = img.resize((new_width, new_height), Image.Resampling.LANCZOS)
 
         return img
+
+    def _draw_cursor(self, img: Image.Image, monitor: dict) -> None:
+        """Draw a synthetic arrow cursor at the current mouse position."""
+        try:
+            x, y = self._mouse.position
+        except Exception:
+            return
+
+        # Translate from virtual-desktop coordinates to monitor-local pixels.
+        local_x = int(x) - monitor["left"]
+        local_y = int(y) - monitor["top"]
+        if not (0 <= local_x < img.width and 0 <= local_y < img.height):
+            return
+
+        draw = ImageDraw.Draw(img)
+        polygon = [(local_x + px, local_y + py) for (px, py) in _CURSOR_POLYGON]
+        draw.polygon(polygon, fill=(255, 255, 255), outline=(0, 0, 0))
 
     def capture_frame_bytes(self, format: str = "JPEG", quality: int = 85) -> bytes:
         """
