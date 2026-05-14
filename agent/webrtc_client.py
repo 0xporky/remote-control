@@ -13,12 +13,12 @@ from typing import Dict, Callable, Optional, Any
 import numpy as np
 from aiortc import (
     RTCConfiguration,
-    RTCIceCandidate,
     RTCIceServer,
     RTCPeerConnection,
     RTCSessionDescription,
     VideoStreamTrack,
 )
+from aiortc.sdp import candidate_from_sdp
 from av import VideoFrame
 
 from screen_capture import ScreenCapture
@@ -220,12 +220,13 @@ class WebRTCClient:
                 logger.debug(f"Received end-of-candidates signal from {client_id}")
                 return
 
-            # Parse and add the ICE candidate
-            ice_candidate = RTCIceCandidate(
-                sdpMid=candidate.get("sdpMid"),
-                sdpMLineIndex=candidate.get("sdpMLineIndex"),
-                candidate=candidate_str,
-            )
+            # candidate_from_sdp expects the SDP attribute value without the "candidate:" prefix
+            if candidate_str.startswith("candidate:"):
+                candidate_str = candidate_str[len("candidate:"):]
+
+            ice_candidate = candidate_from_sdp(candidate_str)
+            ice_candidate.sdpMid = candidate.get("sdpMid")
+            ice_candidate.sdpMLineIndex = candidate.get("sdpMLineIndex")
             await pc.addIceCandidate(ice_candidate)
             logger.debug(f"Added ICE candidate for {client_id}")
 
