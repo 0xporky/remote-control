@@ -181,16 +181,31 @@ async def deploy_up(config: DeployConfig) -> AsyncIterator[ProgressEvent]:
         "cd ~/app && docker compose up -d --build",
     )
 
-    # ── 9. health (warn-only) ────────────────────────────────────
+    # ── 9. health (warn-only, up to ~5 min) ──────────────────────
     health_url = f"https://{config.fqdn}/api/health"
     yield ProgressEvent("health", f"Probing {health_url}...", fqdn=config.fqdn)
-    ok = await wait_for_health(health_url)
-    if ok:
-        yield ProgressEvent("health", "Health OK", fqdn=config.fqdn)
-    else:
+
+    final_ok = False
+    async for a in wait_for_health(health_url):
+        if a.ok:
+            yield ProgressEvent(
+                "health",
+                f"Health OK ({a.elapsed:.0f}s)",
+                fqdn=config.fqdn,
+            )
+            final_ok = True
+            break
         yield ProgressEvent(
             "health",
-            f"Health never succeeded at {health_url} — check 'docker compose logs' on the droplet.",
+            f"Still waiting (try {a.attempt}/10, {a.elapsed:.0f}s elapsed, last: {a.error})",
+            fqdn=config.fqdn,
+        )
+
+    if not final_ok:
+        yield ProgressEvent(
+            "health",
+            f"Health never succeeded at {health_url} after 5 minutes — "
+            "check 'docker compose logs' on the droplet.",
             level="warn",
             fqdn=config.fqdn,
         )

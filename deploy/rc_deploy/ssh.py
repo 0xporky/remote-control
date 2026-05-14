@@ -2,7 +2,7 @@ import asyncio
 import shlex
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Iterable
+from typing import AsyncIterator, Iterable
 
 import httpx
 
@@ -19,6 +19,14 @@ class SSHResult:
     returncode: int
     stdout: str
     stderr: str
+
+
+@dataclass(frozen=True)
+class HealthAttempt:
+    attempt: int
+    elapsed: float
+    ok: bool
+    error: str | None
 
 
 class SSHError(RuntimeError):
@@ -149,15 +157,33 @@ async def wait_for_cloud_init(
 
 
 async def wait_for_health(
-    url: str, *, tries: int = 40, delay: float = 3.0
-) -> bool:
-    async with httpx.AsyncClient(follow_redirects=True, timeout=10.0) as client:
-        for _ in range(tries):
+    url: str,
+    *,
+    tries: int = 10,
+    delay: float = 30.0,
+    request_timeout: float = 10.0,
+) -> AsyncIterator[HealthAttempt]:
+    loop = asyncio.get_event_loop()
+    start = loop.time()
+    async with httpx.AsyncClient(follow_redirects=True, timeout=request_timeout) as client:
+        for attempt in range(1, tries + 1):
+            error: str | None = None
+            ok = False
             try:
                 resp = await client.get(url)
                 if resp.status_code < 400:
-                    return True
-            except httpx.HTTPError:
-                pass
-            await asyncio.sleep(delay)
-    return False
+                    ok = True
+                else:
+                    error = f"HTTP {resp.status_code}"
+            except httpx.HTTPError as exc:
+                error = type(exc).__name__
+            yield HealthAttempt(
+                attempt=attempt,
+                elapsed=loop.time() - start,
+                ok=ok,
+                error=error,
+            )
+            if ok:
+                return
+            if attempt < tries:
+                await asyncio.sleep(delay)

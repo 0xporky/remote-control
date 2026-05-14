@@ -47,21 +47,33 @@ class ConnectionManager:
         logger.info(f"Connection closed: {connection_id}")
 
     async def register_agent(self, connection_id: str, agent_id: str) -> bool:
-        """Register a connection as an agent."""
+        """Register a connection as an agent. Evicts any prior registration with the same agent_id."""
+        stale_ws = None
         async with self._lock:
-            if agent_id in self._agents:
-                logger.warning(f"Agent already registered: {agent_id}")
-                return False
-
             connection = self._connections.get(connection_id)
             if not connection:
                 return False
+
+            prior_connection_id = self._agents.get(agent_id)
+            if prior_connection_id and prior_connection_id != connection_id:
+                prior = self._connections.get(prior_connection_id)
+                if prior is not None:
+                    stale_ws = prior.websocket
+                    prior.is_agent = False
+                    prior.agent_id = None
+                logger.info(f"Evicting prior registration for {agent_id} (connection: {prior_connection_id})")
 
             connection.is_agent = True
             connection.agent_id = agent_id
             self._agents[agent_id] = connection_id
             logger.info(f"Agent registered: {agent_id} (connection: {connection_id})")
-            return True
+
+        if stale_ws is not None:
+            try:
+                await stale_ws.close(code=1000, reason="Superseded by new registration")
+            except Exception as e:
+                logger.warning(f"Failed to close stale agent connection: {e}")
+        return True
 
     async def get_agent_list(self) -> list[str]:
         """Get list of registered agent IDs."""

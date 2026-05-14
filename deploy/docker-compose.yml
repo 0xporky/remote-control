@@ -37,7 +37,7 @@ services:
       context: ./web
       args:
         VITE_API_URL: https://${FQDN}
-        VITE_WS_URL: wss://${FQDN}
+        VITE_WS_URL: wss://${FQDN}/ws/signaling
         VITE_GOOGLE_CLIENT_ID: ${GOOGLE_CLIENT_ID}
     restart: unless-stopped
     expose:

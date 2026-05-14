@@ -11,8 +11,14 @@ import logging
 from typing import Dict, Callable, Optional, Any
 
 import numpy as np
-from aiortc import RTCPeerConnection, RTCSessionDescription, RTCIceCandidate
-from aiortc import VideoStreamTrack
+from aiortc import (
+    RTCConfiguration,
+    RTCIceCandidate,
+    RTCIceServer,
+    RTCPeerConnection,
+    RTCSessionDescription,
+    VideoStreamTrack,
+)
 from av import VideoFrame
 
 from screen_capture import ScreenCapture
@@ -132,12 +138,10 @@ class WebRTCClient:
 
         try:
             # Create new peer connection for this client with STUN servers
-            pc = RTCPeerConnection(configuration={
-                "iceServers": [
-                    {"urls": "stun:stun.l.google.com:19302"},
-                    {"urls": "stun:stun1.l.google.com:19302"},
-                ]
-            })
+            pc = RTCPeerConnection(configuration=RTCConfiguration(iceServers=[
+                RTCIceServer(urls="stun:stun.l.google.com:19302"),
+                RTCIceServer(urls="stun:stun1.l.google.com:19302"),
+            ]))
             self._peer_connections[client_id] = pc
 
             # Set up ICE candidate callback

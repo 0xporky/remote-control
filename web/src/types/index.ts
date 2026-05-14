@@ -25,7 +25,7 @@ export type SignalingMessageType =
   | 'authenticate'
   | 'authenticated'
   | 'error'
-  | 'agent-list'
+  | 'agents-list'
   | 'connect'
   | 'offer'
   | 'answer'
@@ -53,7 +53,7 @@ export interface ErrorMessage extends SignalingMessage {
 }
 
 export interface AgentListMessage extends SignalingMessage {
-  type: 'agent-list';
+  type: 'agents-list';
   agents: string[];
 }
 

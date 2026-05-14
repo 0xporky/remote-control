@@ -84,7 +84,7 @@ export class SignalingService {
         console.error('Server error:', (message as unknown as { message: string }).message);
         break;
 
-      case 'agent-list':
+      case 'agents-list':
         const agentList = message as AgentListMessage;
         this.onAgentListCallback?.(agentList.agents);
         break;
@@ -145,7 +145,7 @@ export class SignalingService {
   }
 
   requestAgentList(): void {
-    this.send({ type: 'list-agents' });
+    this.send({ type: 'get-agents' });
   }
 
   onOpen(callback: () => void): void {
