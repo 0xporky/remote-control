@@ -116,9 +116,16 @@ class ConnectionManager:
         return False
 
     async def relay_message(self, from_id: str, target_id: str, message: dict) -> bool:
-        """Relay a message from one connection to another."""
-        # Add sender info to the message
-        message["from"] = from_id
+        """Relay a message from one connection to another.
+
+        ``from`` is set to the sender's agent_id when the sender is a registered
+        agent, otherwise to the raw connection_id. This lets browser clients
+        track the peer by a stable identifier across reconnects.
+        """
+        async with self._lock:
+            sender = self._connections.get(from_id)
+            from_value = sender.agent_id if sender and sender.is_agent and sender.agent_id else from_id
+        message["from"] = from_value
 
         # Try to find target as agent first, then as connection
         connection = await self.get_agent_connection(target_id)
@@ -128,7 +135,7 @@ class ConnectionManager:
         if connection:
             try:
                 await connection.websocket.send_json(message)
-                logger.debug(f"Relayed message from {from_id} to {target_id}")
+                logger.debug(f"Relayed message from {from_value} to {target_id}")
                 return True
             except Exception as e:
                 logger.error(f"Failed to relay to {target_id}: {e}")

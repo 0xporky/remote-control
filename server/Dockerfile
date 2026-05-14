@@ -40,6 +40,7 @@ COPY config.py .
 COPY signaling.py .
 COPY messages.py .
 COPY rate_limiter.py .
+COPY turn.py .
 COPY routes/ ./routes/
 
 # Set ownership to non-root user

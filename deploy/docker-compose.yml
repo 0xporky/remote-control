@@ -54,9 +54,12 @@ services:
     network_mode: host
     command:
       - "-n"
-      - "--no-cli"
       - "--log-file=stdout"
+      - "--verbose"
       - "--listening-port=3478"
+      - "--listening-ip=${TURN_EXTERNAL_IP}"
+      - "--relay-ip=${TURN_EXTERNAL_IP}"
+      - "--external-ip=${TURN_EXTERNAL_IP}"
       - "--fingerprint"
       - "--lt-cred-mech"
       - "--use-auth-secret"
@@ -66,9 +69,7 @@ services:
       - "--no-dtls"
       - "--min-port=49160"
       - "--max-port=49200"
-      - "--external-ip=${TURN_EXTERNAL_IP}"
       - "--no-multicast-peers"
-      - "--no-loopback-peers"
 
 volumes:
   caddy_data:
