@@ -1,2 +1,5 @@
 *apps.googleusercontent.com.json
 env_variables.md
+__pycache__/
+*.py[cod]
+*$py.class
