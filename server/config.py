@@ -57,6 +57,15 @@ GOOGLE_ALLOWED_EMAILS: list[str] = [
 # Static files
 WEB_CLIENT_PATH: str = os.getenv("WEB_CLIENT_PATH", "../web/dist")
 
+# TURN (coturn) — shared secret for REST API time-limited credentials.
+# Same secret must be set as `static-auth-secret` on the coturn server.
+TURN_SECRET: Optional[str] = os.getenv("TURN_SECRET")
+# Comma-separated TURN URLs returned to clients, e.g. "turn:rc.example.com:3478?transport=udp,turn:rc.example.com:3478?transport=tcp"
+TURN_URLS: list[str] = [
+    u.strip() for u in os.getenv("TURN_URLS", "").split(",") if u.strip()
+]
+TURN_TTL_SECONDS: int = int(os.getenv("TURN_TTL_SECONDS", "3600"))
+
 
 def generate_agent_token() -> str:
     """Generate a secure random token for agent authorization."""

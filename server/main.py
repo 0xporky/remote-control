@@ -2,7 +2,7 @@ import logging
 from datetime import timedelta
 from pathlib import Path
 
-from fastapi import FastAPI, HTTPException, status, Request
+from fastapi import Depends, FastAPI, HTTPException, status, Request
 
 # Configure logging
 logging.basicConfig(level=logging.INFO)
@@ -13,12 +13,14 @@ from fastapi.responses import FileResponse
 
 import config
 from auth import (
-    Token, GoogleLoginRequest,
+    Token, GoogleLoginRequest, TokenData,
     create_access_token,
+    get_current_user,
     verify_google_token, is_google_user_allowed
 )
 from routes.websocket import router as websocket_router
 from rate_limiter import login_rate_limiter, RateLimitConfig
+from turn import make_credentials as make_turn_credentials
 
 # Configure rate limiter from config
 login_rate_limiter.config = RateLimitConfig(
@@ -130,6 +132,31 @@ async def google_login(request: GoogleLoginRequest, req: Request):
     )
 
     return Token(access_token=access_token, token_type="bearer")
+
+
+@app.get("/api/turn-credentials")
+async def turn_credentials(current_user: TokenData = Depends(get_current_user)):
+    """Return time-limited TURN credentials for the authenticated client.
+
+    Returns an empty list if TURN is not configured — clients fall back to STUN-only.
+    """
+    if not config.TURN_SECRET or not config.TURN_URLS:
+        return {"iceServers": []}
+
+    username, credential, expiry = make_turn_credentials(
+        config.TURN_SECRET,
+        config.TURN_TTL_SECONDS,
+        identifier=current_user.username or "user",
+    )
+    return {
+        "iceServers": [{
+            "urls": config.TURN_URLS,
+            "username": username,
+            "credential": credential,
+        }],
+        "ttl": config.TURN_TTL_SECONDS,
+        "expiresAt": expiry,
+    }
 
 
 @app.get("/api/generate-agent-token")

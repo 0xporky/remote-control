@@ -31,6 +31,9 @@ services:
       ACCESS_TOKEN_EXPIRE_MINUTES: ${ACCESS_TOKEN_EXPIRE_MINUTES:-60}
       WS_SESSION_TIMEOUT_SECONDS: ${WS_SESSION_TIMEOUT_SECONDS:-3600}
       SSL_ENABLED: "false"
+      TURN_SECRET: ${TURN_SECRET}
+      TURN_URLS: ${TURN_URLS}
+      TURN_TTL_SECONDS: ${TURN_TTL_SECONDS:-3600}
 
   web:
     build:
@@ -42,6 +45,30 @@ services:
     restart: unless-stopped
     expose:
       - "80"
+
+  # TURN relay for WebRTC NAT traversal. Uses host networking so coturn can
+  # advertise the droplet's public IP and receive UDP relay traffic directly.
+  coturn:
+    image: coturn/coturn:latest
+    restart: unless-stopped
+    network_mode: host
+    command:
+      - "-n"
+      - "--no-cli"
+      - "--log-file=stdout"
+      - "--listening-port=3478"
+      - "--fingerprint"
+      - "--lt-cred-mech"
+      - "--use-auth-secret"
+      - "--static-auth-secret=${TURN_SECRET}"
+      - "--realm=${FQDN}"
+      - "--no-tls"
+      - "--no-dtls"
+      - "--min-port=49160"
+      - "--max-port=49200"
+      - "--external-ip=${TURN_EXTERNAL_IP}"
+      - "--no-multicast-peers"
+      - "--no-loopback-peers"
 
 volumes:
   caddy_data:

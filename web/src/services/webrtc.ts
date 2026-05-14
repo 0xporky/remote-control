@@ -1,6 +1,6 @@
 import type { ConnectionState, InputEvent } from '../types';
 
-const ICE_SERVERS: RTCIceServer[] = [
+const DEFAULT_ICE_SERVERS: RTCIceServer[] = [
   { urls: 'stun:stun.l.google.com:19302' },
   { urls: 'stun:stun1.l.google.com:19302' },
 ];
@@ -15,8 +15,8 @@ export class WebRTCService {
   private onDataChannelOpenCallback: (() => void) | null = null;
   private onDataChannelCloseCallback: (() => void) | null = null;
 
-  constructor() {
-    this.pc = new RTCPeerConnection({ iceServers: ICE_SERVERS });
+  constructor(iceServers?: RTCIceServer[]) {
+    this.pc = new RTCPeerConnection({ iceServers: iceServers ?? DEFAULT_ICE_SERVERS });
     this.setupPeerConnection();
   }
 

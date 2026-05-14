@@ -37,6 +37,9 @@ class Agent:
             screen_capture=self.screen_capture,
             send_answer=self.signaling.send_answer,
             send_ice_candidate=self.signaling.send_ice_candidate,
+            turn_urls=config.turn_urls,
+            turn_secret=config.turn_secret,
+            turn_ttl=config.turn_ttl,
         )
 
         # Initialize input handler for mouse/keyboard injection

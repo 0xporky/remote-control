@@ -14,6 +14,7 @@ REQUIRED = [
     "SECRET_KEY",
     "GOOGLE_CLIENT_ID",
     "AGENT_TOKENS",
+    "TURN_SECRET",
 ]
 
 
@@ -41,6 +42,9 @@ class DeployConfig:
     google_allowed_domains: str
     access_token_expire_minutes: int
     ws_session_timeout_seconds: int
+
+    turn_secret: str
+    turn_ttl_seconds: int
 
     # Filled by load_config() — repo paths used elsewhere in the pipeline.
     repo_root: Path = field(default_factory=lambda: Path.cwd())
@@ -113,6 +117,8 @@ def load_config(env_path: Path | None = None) -> DeployConfig:
         google_allowed_domains=raw.get("GOOGLE_ALLOWED_DOMAINS") or "",
         access_token_expire_minutes=int(raw.get("ACCESS_TOKEN_EXPIRE_MINUTES") or 60),
         ws_session_timeout_seconds=int(raw.get("WS_SESSION_TIMEOUT_SECONDS") or 3600),
+        turn_secret=raw["TURN_SECRET"],
+        turn_ttl_seconds=int(raw.get("TURN_TTL_SECONDS") or 3600),
         repo_root=repo_root,
         deploy_dir=deploy_dir,
     )

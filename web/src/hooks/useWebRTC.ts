@@ -1,6 +1,7 @@
 import { useState, useCallback, useRef, useEffect } from 'react';
 import { WebRTCService } from '../services/webrtc';
 import { SignalingService } from '../services/signaling';
+import { fetchIceServers } from '../services/turn';
 import type { ConnectionState, InputEvent } from '../types';
 
 interface UseWebRTCOptions {
@@ -63,7 +64,9 @@ export function useWebRTC(
     // Clean up existing connection
     serviceRef.current?.close();
 
-    const webrtc = new WebRTCService();
+    // Fetch fresh ICE servers (includes time-limited TURN creds) before constructing the PC.
+    const iceServers = await fetchIceServers();
+    const webrtc = new WebRTCService(iceServers);
     serviceRef.current = webrtc;
     targetAgentRef.current = agentId;
     setPeerConnection(webrtc.peerConnection);

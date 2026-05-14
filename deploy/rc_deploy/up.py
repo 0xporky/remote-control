@@ -21,7 +21,9 @@ SERVER_EXCLUDES = ("node_modules", "dist", "__pycache__", ".venv", "venv")
 WEB_EXCLUDES = ("node_modules", "dist", "__pycache__")
 
 
-def _render_remote_env(config: DeployConfig) -> str:
+def _render_remote_env(config: DeployConfig, droplet_ip: str) -> str:
+    # TURN URLs: UDP for the fast path, TCP as fallback for networks that block UDP/3478.
+    turn_urls = f"turn:{config.fqdn}:3478?transport=udp,turn:{config.fqdn}:3478?transport=tcp"
     lines = [
         f"FQDN={config.fqdn}",
         f"SECRET_KEY={config.secret_key}",
@@ -31,6 +33,10 @@ def _render_remote_env(config: DeployConfig) -> str:
         f"GOOGLE_ALLOWED_DOMAINS={config.google_allowed_domains}",
         f"ACCESS_TOKEN_EXPIRE_MINUTES={config.access_token_expire_minutes}",
         f"WS_SESSION_TIMEOUT_SECONDS={config.ws_session_timeout_seconds}",
+        f"TURN_SECRET={config.turn_secret}",
+        f"TURN_TTL_SECONDS={config.turn_ttl_seconds}",
+        f"TURN_URLS={turn_urls}",
+        f"TURN_EXTERNAL_IP={droplet_ip}",
     ]
     return "\n".join(lines) + "\n"
 
@@ -156,7 +162,7 @@ async def deploy_up(config: DeployConfig) -> AsyncIterator[ProgressEvent]:
 
     # ── 7. remote .env ───────────────────────────────────────────
     yield ProgressEvent("env", "Writing remote .env")
-    env_body = _render_remote_env(config)
+    env_body = _render_remote_env(config, droplet_ip=ip)
     tmp_path: Path | None = None
     try:
         with tempfile.NamedTemporaryFile(

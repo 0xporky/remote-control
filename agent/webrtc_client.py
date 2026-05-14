@@ -22,6 +22,7 @@ from aiortc.sdp import candidate_from_sdp
 from av import VideoFrame
 
 from screen_capture import ScreenCapture
+from turn import make_credentials as make_turn_credentials
 
 logger = logging.getLogger(__name__)
 
@@ -95,6 +96,9 @@ class WebRTCClient:
         screen_capture: ScreenCapture,
         send_answer: Callable[[str, str], Any],
         send_ice_candidate: Callable[[str, dict], Any],
+        turn_urls: Optional[list[str]] = None,
+        turn_secret: Optional[str] = None,
+        turn_ttl: int = 3600,
     ):
         """
         Initialize WebRTC client.
@@ -103,10 +107,16 @@ class WebRTCClient:
             screen_capture: ScreenCapture instance for video
             send_answer: Async callback to send SDP answer via signaling
             send_ice_candidate: Async callback to send ICE candidate via signaling
+            turn_urls: Optional TURN URLs (relay fallback when STUN can't punch through NAT)
+            turn_secret: Shared secret for HMAC-signed time-limited credentials
+            turn_ttl: Lifetime of generated TURN credentials, in seconds
         """
         self._screen_capture = screen_capture
         self._send_answer = send_answer
         self._send_ice_candidate = send_ice_candidate
+        self._turn_urls = turn_urls or []
+        self._turn_secret = turn_secret
+        self._turn_ttl = turn_ttl
 
         # Active peer connections: client_id -> RTCPeerConnection
         self._peer_connections: Dict[str, RTCPeerConnection] = {}
@@ -137,11 +147,21 @@ class WebRTCClient:
         logger.info(f"Processing offer from client: {client_id}")
 
         try:
-            # Create new peer connection for this client with STUN servers
-            pc = RTCPeerConnection(configuration=RTCConfiguration(iceServers=[
+            # Build ICE server list: STUN for srflx discovery + TURN (if configured) for relay fallback.
+            ice_servers = [
                 RTCIceServer(urls="stun:stun.l.google.com:19302"),
                 RTCIceServer(urls="stun:stun1.l.google.com:19302"),
-            ]))
+            ]
+            if self._turn_urls and self._turn_secret:
+                username, credential = make_turn_credentials(
+                    self._turn_secret, self._turn_ttl, identifier=f"agent:{client_id[:8]}"
+                )
+                ice_servers.append(RTCIceServer(
+                    urls=self._turn_urls,
+                    username=username,
+                    credential=credential,
+                ))
+            pc = RTCPeerConnection(configuration=RTCConfiguration(iceServers=ice_servers))
             self._peer_connections[client_id] = pc
 
             # Set up ICE candidate callback
