@@ -71,8 +71,18 @@ def _expand_key(path_str: str) -> Path:
     return Path(path_str).expanduser()
 
 
-def load_config(env_path: Path | None = None) -> DeployConfig:
-    """Load deploy/.env into a DeployConfig. Raises ConfigError for missing/placeholder vars."""
+def load_config(
+    env_path: Path | None = None,
+    overrides: dict[str, str] | None = None,
+) -> DeployConfig:
+    """Load deploy/.env into a DeployConfig. Raises ConfigError for missing/placeholder vars.
+
+    `overrides` lets callers (notably the Telegram bot) supply values at runtime
+    that would otherwise have to live in `.env`. Overridden keys skip the
+    missing/CHANGE_ME placeholder check, so `.env` can keep placeholder values
+    for SUBDOMAIN/SECRET_KEY/AGENT_TOKENS/TURN_SECRET when secrets are generated
+    fresh per deploy.
+    """
     deploy_dir = (Path(__file__).resolve().parent.parent).resolve()
     repo_root = deploy_dir.parent
     env_file = env_path if env_path is not None else deploy_dir / ".env"
@@ -81,6 +91,9 @@ def load_config(env_path: Path | None = None) -> DeployConfig:
         raise ConfigError(f".env not found at {env_file}. Copy .env.example and fill in values.")
 
     raw = {k: (v or "") for k, v in dotenv_values(env_file).items()}
+    if overrides:
+        for k, v in overrides.items():
+            raw[k] = v
 
     missing = []
     placeholder = []
