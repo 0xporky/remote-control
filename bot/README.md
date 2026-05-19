@@ -36,8 +36,14 @@ Run all commands from this directory (`bot/`).
 **Windows (PowerShell):**
 
 ```powershell
-python -m venv .venv
+py -3.11 -m venv .venv
 .venv\Scripts\Activate.ps1
+pip install -r requirements.txt
+```
+**Windows (CMD):**
+```powershell
+py -3.11 -m venv .venv
+.venv\Scripts\activate
 pip install -r requirements.txt
 ```
 
