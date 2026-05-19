@@ -1,10 +1,28 @@
 import asyncio
 import shlex
+import sys
 from dataclasses import dataclass
 from pathlib import Path
 from typing import AsyncIterator, Iterable
 
 import httpx
+
+
+def _rsync_path(p: Path | str) -> str:
+    """Convert a path to a form rsync understands.
+
+    On Windows, MSYS2/Cygwin rsync interprets `C:\\...` as a remote target
+    (colon = host separator), so we rewrite drive letters into MSYS form:
+    `C:\\Users\\foo` -> `/c/Users/foo`.
+    """
+    s = str(p)
+    if sys.platform != "win32":
+        return s
+    if len(s) >= 2 and s[1] == ":":
+        drive = s[0].lower()
+        tail = s[2:].lstrip("\\/").replace("\\", "/")
+        return f"/{drive}/{tail}"
+    return s.replace("\\", "/")
 
 SSH_OPTS: list[str] = [
     "-o", "StrictHostKeyChecking=no",
@@ -85,7 +103,7 @@ async def scp(src: Path, dst: str, key: Path, *, timeout: float | None = None) -
 
 
 def _rsync_ssh_arg(key: Path) -> str:
-    parts = ["ssh", "-i", shlex.quote(str(key))] + [shlex.quote(o) for o in SSH_OPTS]
+    parts = ["ssh", "-i", shlex.quote(_rsync_path(key))] + [shlex.quote(o) for o in SSH_OPTS]
     return " ".join(parts)
 
 
@@ -106,7 +124,9 @@ async def rsync(
         cmd += ["--exclude", pattern]
     # Append trailing slash on directories so rsync copies *contents* into dst
     # (Path() strips trailing slashes from the call site, so we re-add it here).
-    src_str = f"{src}/" if src.is_dir() else str(src)
+    src_str = _rsync_path(src)
+    if src.is_dir():
+        src_str += "/"
     cmd += [src_str, dst]
     result = await _run(cmd, timeout=timeout)
     if result.returncode != 0:
@@ -121,7 +141,7 @@ async def rsync_files(
     timeout: float | None = None,
 ) -> None:
     cmd: list[str] = ["rsync", "-a", "-e", _rsync_ssh_arg(key)]
-    cmd += [str(f) for f in files]
+    cmd += [_rsync_path(f) for f in files]
     cmd.append(dst)
     result = await _run(cmd, timeout=timeout)
     if result.returncode != 0:
