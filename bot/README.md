@@ -48,8 +48,6 @@ In `deploy/.env`, set `DO_SSH_KEY_PATH` to the **container** path you'll mount t
 
 ```bash
 docker run -d --name rc-infra-bot --restart unless-stopped \
-  -v "$(pwd)/bot/infra/.env:/app/bot/infra/.env:ro" \
-  -v "$(pwd)/deploy/.env:/app/deploy/.env:ro" \
   -v "$HOME/.ssh/id_ed25519:/run/secrets/id_ed25519:ro" \
   rc-infra-bot
 ```
@@ -62,11 +60,12 @@ Notes:
 - The repo-root `.dockerignore` keeps `.env`, `.state.json`, `.venv/`, `__pycache__/`, and `node_modules/` out of the build context.
 
 **On the Windows host:**
+It is steps how to run agent via cmd on Windows.
 
 ```powershell
 cd bot\agent
 py -3.11 -m venv .venv
-.venv\Scripts\Activate.ps1
+.venv\Scripts\activate
 pip install -r requirements.txt
 copy .env.example .env   # fill in TELEGRAM_BOT_TOKEN (a DIFFERENT BotFather bot), ALLOWED_TELEGRAM_USER_ID, PYTHON_BIN
 python main.py
