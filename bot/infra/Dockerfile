@@ -30,4 +30,6 @@ COPY bot/infra/ /app/bot/infra/
 # Secrets (.env files, SSH key) and state are bind-mounted at runtime — never
 # baked in. See bot/README.md for the docker run incantation.
 WORKDIR /app/bot/infra
-CMD ["python", "main.py"]
+
+# Just start interactive shell
+CMD ["/bin/sh"]
