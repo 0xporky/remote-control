@@ -3,7 +3,7 @@
 start() spawns `python agent/main.py …`, drains its stdout, and resolves to
 StartResult once the readiness line is seen, the process exits, or the timeout
 elapses. stop() terminates either an in-memory Process handle or, after a bot
-restart, the PID recovered from bot/.state.json (using psutil).
+restart, the PID recovered from bot/agent/.state.json (using psutil).
 
 Readiness signal: `agent/signaling.py:83` logs "Registered as agent: <id>"
 right after the WebSocket register handshake — the canonical "agent is up"
@@ -22,7 +22,8 @@ import psutil
 
 logger = logging.getLogger(__name__)
 
-_REPO_ROOT = Path(__file__).resolve().parent.parent
+# bot/agent/agent_runner.py → repo root is three parents up.
+_REPO_ROOT = Path(__file__).resolve().parent.parent.parent
 _AGENT_DIR = _REPO_ROOT / "agent"
 _AGENT_ENTRY = _AGENT_DIR / "main.py"
 

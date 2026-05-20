@@ -9,6 +9,7 @@ Three-component system for browser-based remote desktop via WebRTC:
 - `agent/` — Python desktop agent. Captures the screen, streams video over WebRTC, and injects mouse/keyboard from the remote browser. Runs on the machine being controlled.
 - `server/` — Python FastAPI signaling server. Handles JWT/Google OAuth, relays WebRTC SDP and ICE between agents and browser clients. Does **not** relay video or input — those are peer-to-peer.
 - `web/` — React + TypeScript + Vite browser client. Authenticates against the server, negotiates WebRTC to an agent, displays video, captures input via Pointer Lock.
+- `bot/` — two independent Telegram bots that drive the lifecycle from a phone. `bot/infra/` runs on a Linux host and provisions the DigitalOcean stack; `bot/agent/` runs on the Windows desktop and spawns the agent process. They communicate via a base64 JSON credentials blob the user copy-pastes between chats. See `bot/CLAUDE.md`.
 
 Each subdirectory has its own `CLAUDE.md` with detailed architecture, class responsibilities, message protocols, and debugging tips. **Read those first** before touching files in that component — they document non-obvious flows (offer/answer sequencing, session timeout logic, input event mapping) that are not obvious from the code alone.
 

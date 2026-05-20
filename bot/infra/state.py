@@ -1,8 +1,12 @@
-"""Bot-owned state file persisted between /up and /down (survives bot restarts).
+"""Infra-bot state persisted between /up and /down (survives bot restarts).
 
-Lives at bot/.state.json. Holds the dynamic deploy values generated for the
-current up→down cycle so a teardown still has the right SUBDOMAIN/secrets
+Lives at bot/infra/.state.json. Holds the dynamic deploy values generated for
+the current up→down cycle so a teardown still has the right SUBDOMAIN/secrets
 even if the bot process restarted in between. Cleared at the end of /down.
+
+Differs from the Agent bot's state by carrying the full Secrets triple (needed
+to rebuild DeployConfig for /down) and not carrying any agent_pid (this bot
+never spawns the agent — see bot/agent/).
 """
 import json
 import os
@@ -31,7 +35,6 @@ class BotState:
     fqdn: str
     secrets: Secrets
     started_at: str = field(default_factory=lambda: datetime.now(tz=timezone.utc).isoformat())
-    agent_pid: int | None = None
 
 
 def read_state(path: Path = STATE_PATH) -> BotState | None:
@@ -49,7 +52,6 @@ def read_state(path: Path = STATE_PATH) -> BotState | None:
             turn_secret=s.get("turn_secret", ""),
         ),
         started_at=data.get("started_at", ""),
-        agent_pid=data.get("agent_pid"),
     )
 
 

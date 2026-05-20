@@ -11,7 +11,8 @@ from pathlib import Path
 from typing import Awaitable, Callable
 
 # Allow `import rc_deploy` even when the bot runs without installing the deploy package.
-_REPO_ROOT = Path(__file__).resolve().parent.parent
+# bot/infra/deploy_runner.py → repo root is three parents up.
+_REPO_ROOT = Path(__file__).resolve().parent.parent.parent
 sys.path.insert(0, str(_REPO_ROOT / "deploy"))
 
 from rc_deploy import (  # noqa: E402

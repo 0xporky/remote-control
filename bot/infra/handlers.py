@@ -1,7 +1,15 @@
-"""Telegram command/callback handlers for /up and /down."""
+"""Telegram command/callback handlers for /up and /down (Infra bot).
+
+The Infra bot owns infrastructure lifecycle only. On /up it provisions the
+droplet, then emits a base64-encoded JSON credentials blob in the success
+message so the user can paste it into the Agent bot to start the desktop
+agent.
+"""
 from __future__ import annotations
 
 import asyncio
+import base64
+import json
 import logging
 import secrets as secrets_module
 import time
@@ -20,7 +28,6 @@ from telegram.ext import (
 
 import deploy_runner
 import state
-from agent_runner import AgentRunner
 
 logger = logging.getLogger(__name__)
 
@@ -28,6 +35,10 @@ SUBDOMAIN_CHOICES = ("rc", "rc1", "rc2", "rc3")
 _CB_PREFIX = "sub:"
 _EDIT_MIN_INTERVAL_SECONDS = 2.0
 _LINES_KEPT = 15
+
+# Wire-format version for the base64 JSON blob handed to the Agent bot. Bump
+# when the schema changes; the Agent bot rejects unknown versions.
+_BLOB_VERSION = 1
 
 
 class _ProgressEditor:
@@ -73,12 +84,23 @@ class _ProgressEditor:
                 logger.warning("Failed to edit progress message: %s", exc)
 
 
-class Handlers:
-    """Container so the agent runner and the long-running lock are shared across callbacks."""
+def _encode_blob(*, subdomain: str, fqdn: str, agent_token: str, turn_secret: str) -> str:
+    payload = {
+        "v": _BLOB_VERSION,
+        "sub": subdomain,
+        "fqdn": fqdn,
+        "agent_token": agent_token,
+        "turn_secret": turn_secret,
+    }
+    raw = json.dumps(payload, separators=(",", ":")).encode("utf-8")
+    return base64.urlsafe_b64encode(raw).decode("ascii")
 
-    def __init__(self, *, allowed_user_id: int, python_bin: str):
+
+class Handlers:
+    """Container so the long-running lock is shared across callbacks."""
+
+    def __init__(self, *, allowed_user_id: int):
         self.allowed_user_id = allowed_user_id
-        self.agent = AgentRunner(python_bin=python_bin)
         self._lock = asyncio.Lock()
 
     # ── auth ───────────────────────────────────────────────────────
@@ -172,26 +194,23 @@ class Handlers:
             )
             return
 
-        await chat.send_message("Deploy reached `done`. Starting local agent…", parse_mode=ParseMode.MARKDOWN)
+        current = state.read_state()
+        if current is not None:
+            state.write_state(replace(current, status="up"))
 
-        start = await self.agent.start(
+        blob = _encode_blob(
+            subdomain=subdomain,
             fqdn=fqdn,
             agent_token=sec.agent_tokens,
             turn_secret=sec.turn_secret,
         )
-
-        current = state.read_state()
-        if current is not None:
-            state.write_state(replace(current, status="up", agent_pid=start.pid))
-
-        if start.ok:
-            await chat.send_message(f"✅ Ready: https://{fqdn}/")
-        else:
-            tail = f"\n\n<pre>{_escape_html(start.tail)[-1500:]}</pre>" if start.tail else ""
-            await chat.send_message(
-                f"❌ {start.error}.\nDroplet is up — run /down to tear it down.{tail}",
-                parse_mode=ParseMode.HTML,
-            )
+        await chat.send_message(
+            f"✅ Deploy reached <b>done</b> at https://{fqdn}/\n\n"
+            f"Start the agent on the Windows host: run /up on the Agent bot, "
+            f"pick <b>{subdomain}</b>, then paste this blob:\n\n"
+            f"<code>{blob}</code>",
+            parse_mode=ParseMode.HTML,
+        )
 
     # ── /down ──────────────────────────────────────────────────────
     async def cmd_down(self, update: Update, _ctx: ContextTypes.DEFAULT_TYPE) -> None:
@@ -213,9 +232,6 @@ class Handlers:
     async def _run_down(self, update: Update, current: state.BotState) -> None:
         chat = update.effective_chat
         state.write_state(replace(current, status="tearing_down"))
-
-        await chat.send_message(f"🛑 Stopping agent for {current.fqdn}…")
-        await self.agent.stop(pid_from_state=current.agent_pid)
 
         try:
             config = deploy_runner.build_config(current.subdomain, current.secrets)
@@ -240,10 +256,6 @@ class Handlers:
 
         state.clear_state()
         await chat.send_message("✅ Torn down. Compute billing stopped.")
-
-
-def _escape_html(s: str) -> str:
-    return s.replace("&", "&amp;").replace("<", "&lt;").replace(">", "&gt;")
 
 
 def register(app: Application, handlers: Handlers) -> None:
