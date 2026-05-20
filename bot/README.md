@@ -24,7 +24,7 @@ Read each bot's own README/CLAUDE.md for the full details:
 
 ### Quick path
 
-**On the Linux host:**
+**On the Linux host (bare metal / venv):**
 
 ```bash
 cd bot/infra
@@ -34,6 +34,32 @@ cp .env.example .env   # fill in TELEGRAM_BOT_TOKEN, ALLOWED_TELEGRAM_USER_ID
 # Make sure ../../deploy/.env has DigitalOcean + DOMAIN + GOOGLE_CLIENT_ID
 python main.py
 ```
+
+**On the Linux host (Docker, Alpine-based):**
+
+The image bakes in the repo code that gets rsynced to the droplet (`server/`, `web/`, `deploy/`). Secrets — `.env` files and the SSH private key — are bind-mounted at runtime so they stay out of the image. Build context is the repo root.
+
+```bash
+# From the repo root
+docker build -t rc-infra-bot -f bot/infra/Dockerfile .
+```
+
+In `deploy/.env`, set `DO_SSH_KEY_PATH` to the **container** path you'll mount the key at (e.g. `/run/secrets/id_ed25519`), not the host path.
+
+```bash
+docker run -d --name rc-infra-bot --restart unless-stopped \
+  -v "$(pwd)/bot/infra/.env:/app/bot/infra/.env:ro" \
+  -v "$(pwd)/deploy/.env:/app/deploy/.env:ro" \
+  -v "$HOME/.ssh/id_ed25519:/run/secrets/id_ed25519:ro" \
+  rc-infra-bot
+```
+
+Notes:
+
+- `.state.json` lives in the container's writable layer — survives `docker restart` / `docker stop && docker start`, but `docker rm` wipes it. Don't pass `--rm` to `docker run`. If you must recreate the container while a deploy is live, write down the FQDN and use the DigitalOcean dashboard to tear it down manually.
+- Tail logs: `docker logs -f rc-infra-bot`.
+- Rebuild whenever `server/`, `web/`, or `deploy/` changes — those files are baked into the image at build time.
+- The repo-root `.dockerignore` keeps `.env`, `.state.json`, `.venv/`, `__pycache__/`, and `node_modules/` out of the build context.
 
 **On the Windows host:**
 

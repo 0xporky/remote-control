@@ -1,0 +1,27 @@
+# Repo-root .dockerignore. Applies to any Docker build context rooted here.
+
+# Secrets — must never end up in an image.
+**/.env
+**/.env.local
+
+# Runtime state.
+**/.state.json
+
+# Python caches and venvs.
+**/__pycache__
+**/*.pyc
+**/.venv
+**/venv
+
+# Frontend build artefacts and deps.
+**/node_modules
+**/dist
+
+# Git.
+.git
+.gitignore
+
+# OS / IDE junk.
+.DS_Store
+.idea
+.vscode
