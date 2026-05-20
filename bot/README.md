@@ -80,6 +80,22 @@ Each bot needs its own BotFather bot (talk to [@BotFather](https://t.me/BotFathe
 3. Open `https://<sub>.<domain>/` in a browser, sign in with Google, and the Windows desktop should stream.
 4. When done: Agent bot `/down` → Infra bot `/down`. In that order, so the agent isn't reconnecting against a vanishing droplet.
 
+## Turning the laptop screen off while leaving the agent running
+
+When you want to leave the Windows laptop on (so you can reconnect later) but don't need the physical panel lit, run on the Windows host:
+
+```powershell
+nircmd.exe monitor off
+```
+
+Get `nircmd.exe` from https://www.nirsoft.net/utils/nircmd.html and put it on `PATH` (or invoke with a full path).
+
+Notes:
+
+- The agent keeps capturing — Windows still composes the desktop into the framebuffer, so the WebRTC stream is unaffected.
+- The first mouse or key event you send from the browser counts as user input and wakes the panel back on.
+- Make sure auto-lock / "require sign-in on wake" is disabled in Windows. The agent runs in user-mode and cannot reach the lock screen, so if the panel wakes into a lock prompt you'll be stuck.
+
 ## Files each bot writes at runtime
 
 | File | Bot | Contents | Gitignored |
