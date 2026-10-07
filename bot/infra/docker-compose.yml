@@ -1,0 +1,54 @@
+# One container that runs the Infra bot (the thing that brings the DigitalOcean
+# stack up and down from Telegram). Run it from this directory:
+#
+#   cp .env.example .env && $EDITOR .env
+#   docker compose build
+#   docker compose up -d
+#   docker compose logs -f
+#
+# Full walkthrough: bot/infra/RUN_DOCKER.md
+name: rc-infra
+
+services:
+  infra-bot:
+    build:
+      # Repo root: the image bakes in deploy/, server/ and web/, which get
+      # rsynced to the droplet during /up.
+      context: ../..
+      dockerfile: bot/infra/Dockerfile
+    image: rc-infra-bot:latest
+    # No container_name on purpose: an older hand-rolled `docker run --name
+    # rc-infra-bot` container would collide with it. Compose names this
+    # rc-infra-infra-bot-1; use `docker compose logs -f` instead of the name.
+    restart: unless-stopped
+
+    env_file:
+      # Optional: reuse the DigitalOcean/domain/Google values you already keep
+      # for the bare-metal deploy scripts. Anything set in ./.env wins.
+      - path: ../../deploy/.env
+        required: false
+      - path: .env
+        required: true
+
+    volumes:
+      # Deploy SSH private key, read-only. The entrypoint copies it to a 0600
+      # file inside the container because ssh(1) rejects loose permissions.
+      - ${SSH_KEY_HOST_PATH:-~/.ssh/id_ed25519}:/run/secrets/ssh_key:ro
+      # Both state files (bot state with the per-deploy secrets, and the
+      # rc_deploy droplet state). MUST persist: without it a restart loses the
+      # droplet id and you can only tear down from the DO dashboard.
+      - infra_state:/data
+
+    # The bot is a long-poll client: no inbound ports, outbound HTTPS to
+    # api.telegram.org + api.digitalocean.com and outbound SSH to the droplet.
+    # python-telegram-bot stops cleanly on SIGTERM; give it room to drain.
+    stop_grace_period: 30s
+
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "3"
+
+volumes:
+  infra_state:

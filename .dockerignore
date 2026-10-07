@@ -1,27 +1,52 @@
-# Repo-root .dockerignore. Applies to any Docker build context rooted here.
+# Repo-root .dockerignore. Applies to any Docker build context rooted here,
+# notably `docker build -f bot/infra/Dockerfile .` (the Infra bot image bakes in
+# deploy/, server/ and web/).
 
 # Secrets — must never end up in an image.
+# Keep .env*.example: harmless, and handy for `docker run ... cat .env.example`.
 **/.env
-**/.env.local
+**/.env.*
+!**/.env.example
+*apps.googleusercontent.com.json
+env_variables.md
+**/id_rsa
+**/id_ed25519
+**/*.pem
+**/*.key
+**/*.p12
+**/.ssh
 
 # Runtime state.
 **/.state.json
+**/.state.*.json
 
-# Python caches and venvs.
+# Python caches, venvs and build artefacts.
 **/__pycache__
-**/*.pyc
+**/*.py[cod]
 **/.venv
 **/venv
+**/.pytest_cache
+**/.mypy_cache
+**/.ruff_cache
+**/*.egg-info
 
 # Frontend build artefacts and deps.
 **/node_modules
 **/dist
+**/.vite
 
 # Git.
 .git
 .gitignore
+.gitattributes
+**/.github
+
+# Docker build files themselves (not needed inside the image).
+**/.dockerignore
 
 # OS / IDE junk.
 .DS_Store
+Thumbs.db
 .idea
 .vscode
+.claude

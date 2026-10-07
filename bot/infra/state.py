@@ -16,7 +16,13 @@ from datetime import datetime, timezone
 from pathlib import Path
 from typing import Literal
 
-STATE_PATH = (Path(__file__).resolve().parent / ".state.json").resolve()
+# Defaults to bot/infra/.state.json. INFRA_BOT_STATE_PATH relocates it so the
+# Docker image can keep state on a named volume instead of inside the code tree
+# (set in bot/infra/Dockerfile); leave it unset for bare-metal runs.
+STATE_PATH = Path(
+    os.environ.get("INFRA_BOT_STATE_PATH")
+    or (Path(__file__).resolve().parent / ".state.json")
+).resolve()
 
 Status = Literal["deploying", "up", "tearing_down"]
 
