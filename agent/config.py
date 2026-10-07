@@ -8,6 +8,10 @@ DEFAULT_SERVER_URL: str = os.getenv("SERVER_URL", "ws://localhost:8000/ws/signal
 DEFAULT_AGENT_ID: str = os.getenv("AGENT_ID", socket.gethostname())
 DEFAULT_AGENT_TOKEN: Optional[str] = os.getenv("AGENT_TOKEN")  # Authorization token (required)
 
+# TLS trust store for wss:// — path to a PEM CA bundle. Empty = use certifi
+# (see signaling.build_ssl_context for why we don't trust the OS store).
+DEFAULT_CA_BUNDLE: Optional[str] = os.getenv("AGENT_CA_BUNDLE")
+
 # TURN — comma-separated URLs, shared secret used for HMAC creds.
 DEFAULT_TURN_URLS: Optional[str] = os.getenv("TURN_URLS")
 DEFAULT_TURN_SECRET: Optional[str] = os.getenv("TURN_SECRET")
@@ -37,8 +41,10 @@ class Config:
         turn_urls: Optional[str] = DEFAULT_TURN_URLS,
         turn_secret: Optional[str] = DEFAULT_TURN_SECRET,
         turn_ttl: int = DEFAULT_TURN_TTL,
+        ca_bundle: Optional[str] = DEFAULT_CA_BUNDLE,
     ):
         self.server_url = server_url
+        self.ca_bundle = ca_bundle
         self.agent_id = agent_id
         self.agent_token = agent_token
         self.monitor = monitor
@@ -103,6 +109,13 @@ class Config:
             default=DEFAULT_TURN_TTL,
             help=f"TURN credential TTL in seconds (default: {DEFAULT_TURN_TTL})"
         )
+        parser.add_argument(
+            "--ca-bundle",
+            default=DEFAULT_CA_BUNDLE,
+            help="PEM CA bundle used to verify the wss:// server certificate "
+                 "(or set AGENT_CA_BUNDLE). Default: the certifi bundle. "
+                 "There is deliberately no option to skip verification."
+        )
 
         args = parser.parse_args()
 
@@ -119,4 +132,5 @@ class Config:
             turn_urls=args.turn_urls,
             turn_secret=args.turn_secret,
             turn_ttl=args.turn_ttl,
+            ca_bundle=args.ca_bundle,
         )

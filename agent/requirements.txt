@@ -2,6 +2,10 @@ aiortc>=1.6.0
 mss>=9.0.0
 pynput>=1.7.6
 websockets>=12.0
+# Trust store for wss://. Required: the Windows system ROOT store ships an
+# expired cross-signed ISRG Root X2, which breaks Let's Encrypt ECDSA chains.
+# See agent/signaling.py:build_ssl_context.
+certifi>=2024.7.4
 aiohttp>=3.9.0
 av>=11.0.0
 Pillow>=10.0.0

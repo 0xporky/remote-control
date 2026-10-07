@@ -279,6 +279,39 @@ Solution: Install ffmpeg@7 and set PKG_CONFIG_PATH before pip install.
 - Firewall blocking UDP?
 - Consider adding TURN server for strict NAT
 
+**6. `CERTIFICATE_VERIFY_FAILED ... certificate has expired` on a `wss://` URL**
+
+```
+signaling - ERROR - TLS verification failed: [SSL: CERTIFICATE_VERIFY_FAILED] certificate verify failed: certificate has expired
+```
+
+Usually **not** the server's fault. The Windows system ROOT store commonly
+holds only the *cross-signed* `ISRG Root X2` (issuer `ISRG Root X1`, notAfter
+`2025-09-15`) and not the self-signed one (valid to 2040). Caddy defaults to
+ECDSA keys, so Let's Encrypt issues from the E-series intermediates that chain
+to X2 → OpenSSL builds a path to the expired cross-sign and rejects a perfectly
+valid certificate. Browsers are unaffected (they use CryptoAPI).
+
+`agent/signaling.py:build_ssl_context` therefore pins the trust store to
+`certifi` instead of the OS store. If this error returns:
+
+```bash
+# Does the trust store hold expired roots? (reproduces the failure)
+python -c "import ssl,socket;ssl.create_default_context().wrap_socket(socket.create_connection(('valid-isrgrootx2.letsencrypt.org',443)),server_hostname='valid-isrgrootx2.letsencrypt.org')"
+pip install -U certifi                   # refresh the bundle
+openssl s_client -connect <fqdn>:443 -servername <fqdn> </dev/null 2>/dev/null \
+  | openssl x509 -noout -dates -issuer   # confirm the server cert really is valid
+```
+
+Also check the machine clock (`w32tm /resync`) — a clock set into the future
+produces the identical message. `deploy/Caddyfile` sets `key_type rsa2048` so
+new certs chain to `ISRG Root X1` and avoid the X2 path entirely.
+
+Do **not** "fix" this by disabling verification: this websocket carries the
+remote-desktop control channel, and `CERT_NONE` would let any MITM on the path
+take over keyboard and mouse. There is intentionally no `--insecure` flag; use
+`--ca-bundle` / `AGENT_CA_BUNDLE` if a custom CA is genuinely needed.
+
 ### Testing Components Individually
 
 **Test screen capture:**
@@ -327,6 +360,7 @@ asyncio.run(test())
 | `monitor` | int | 1 | `--monitor` |
 | `fps` | int | 30 | `--fps` |
 | `scale` | float | 1.0 | `--scale` |
+| `ca_bundle` | Optional[str] | None → certifi | `--ca-bundle` / `AGENT_CA_BUNDLE` (PEM trust store for `wss://`) |
 
 ### Reconnection Constants (config.py)
 

@@ -1,5 +1,15 @@
 # Caddy auto-TLS via Let's Encrypt. {$FQDN} is provided by docker compose from .env.
 # Path routing: server handles /api and /ws, web handles everything else.
+{
+	# Force RSA leaf keys so Let's Encrypt issues from the R-series
+	# intermediates, which chain to ISRG Root X1. Caddy's default (ECDSA P-256)
+	# chains to ISRG Root X2, and a lot of client trust stores — notably the
+	# Windows ROOT store — hold only the *cross-signed* X2 that expired
+	# 2025-09-15, so those clients reject an otherwise valid certificate with
+	# "certificate has expired". X1 is present and valid everywhere.
+	# Agent-side counterpart: agent/signaling.py:build_ssl_context.
+	key_type rsa2048
+}
 
 {$FQDN} {
 	encode zstd gzip

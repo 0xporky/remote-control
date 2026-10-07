@@ -1,7 +1,9 @@
 import asyncio
 import json
 import logging
+import ssl
 from typing import Callable, Optional
+from urllib.parse import urlparse
 
 import websockets
 from websockets.exceptions import ConnectionClosed
@@ -9,6 +11,51 @@ from websockets.exceptions import ConnectionClosed
 from config import Config, RECONNECT_DELAY, MAX_RECONNECT_ATTEMPTS
 
 logger = logging.getLogger(__name__)
+
+
+def build_ssl_context(config: Config) -> Optional[ssl.SSLContext]:
+    """Build the TLS context for a `wss://` signaling URL (None for `ws://`).
+
+    We pin the trust store to the **certifi** bundle instead of letting
+    `websockets` fall back to `ssl.create_default_context()`, which on Windows
+    loads whatever happens to sit in the system ROOT store. That store very
+    often contains only the *cross-signed* "ISRG Root X2" (issuer: ISRG Root X1,
+    notAfter 2025-09-15) and not the self-signed one (valid to 2040). Since
+    Caddy requests ECDSA keys by default, Let's Encrypt issues from the E-series
+    intermediates that chain to ISRG Root X2 — so OpenSSL builds a path to the
+    expired cross-sign and every connection dies with:
+
+        [SSL: CERTIFICATE_VERIFY_FAILED] certificate verify failed:
+        certificate has expired
+
+    even though the server certificate itself is perfectly valid (browsers,
+    which use CryptoAPI, connect fine). certifi ships the self-signed X2 and
+    never the expired cross-sign, so verification stays strict *and* correct.
+
+    Verification is always enabled. There is no "insecure" switch on purpose:
+    this websocket is the control channel for a remote desktop, and disabling
+    certificate checks would hand a MITM full keyboard and mouse access.
+    """
+    if urlparse(config.server_url).scheme != "wss":
+        return None
+
+    cafile = getattr(config, "ca_bundle", None)
+    if cafile:
+        logger.info(f"TLS: verifying server certificate against {cafile}")
+        return ssl.create_default_context(cafile=cafile)
+
+    try:
+        import certifi
+    except ImportError:
+        logger.warning(
+            "certifi is not installed — falling back to the OS trust store. "
+            "On Windows this can fail with 'certificate has expired' on valid "
+            "Let's Encrypt certificates. Run: pip install -r requirements.txt"
+        )
+        return ssl.create_default_context()
+
+    logger.info(f"TLS: verifying server certificate against certifi ({certifi.where()})")
+    return ssl.create_default_context(cafile=certifi.where())
 
 
 class SignalingClient:
@@ -26,6 +73,9 @@ class SignalingClient:
         self._on_offer: Optional[Callable] = None
         self._on_ice_candidate: Optional[Callable] = None
 
+        # Built once: loading a CA bundle on every reconnect is wasteful.
+        self._ssl_context: Optional[ssl.SSLContext] = build_ssl_context(config)
+
     def on_offer(self, handler: Callable):
         """Set handler for incoming SDP offers."""
         self._on_offer = handler
@@ -38,7 +88,10 @@ class SignalingClient:
         """Connect to the signaling server."""
         try:
             logger.info(f"Connecting to {self.config.server_url}...")
-            self.websocket = await websockets.connect(self.config.server_url)
+            self.websocket = await websockets.connect(
+                self.config.server_url,
+                ssl=self._ssl_context,
+            )
 
             # Wait for connection confirmation
             msg = await self.websocket.recv()
@@ -52,6 +105,19 @@ class SignalingClient:
             else:
                 logger.error(f"Unexpected response: {data}")
                 return False
+
+        except ssl.SSLCertVerificationError as e:
+            # Reconnecting cannot fix a trust-store problem, so say what to check.
+            logger.error(
+                f"TLS verification failed: {e}. The server certificate could not "
+                f"be validated. Check: (1) certifi is installed and current "
+                f"(`pip install -U certifi`), (2) this machine's clock is correct, "
+                f"(3) the certificate on {urlparse(self.config.server_url).hostname} "
+                f"is actually valid — run: openssl s_client -connect "
+                f"{urlparse(self.config.server_url).hostname}:443 -servername "
+                f"{urlparse(self.config.server_url).hostname} | openssl x509 -noout -dates -issuer"
+            )
+            return False
 
         except Exception as e:
             logger.error(f"Connection failed: {e}")
