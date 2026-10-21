@@ -4,7 +4,13 @@ import tempfile
 from dataclasses import asdict, dataclass
 from pathlib import Path
 
-STATE_PATH = (Path(__file__).resolve().parent.parent / ".state.json").resolve()
+# Defaults to deploy/.state.json. RC_DEPLOY_STATE_PATH relocates it so the Infra
+# bot's Docker image can keep it on a named volume (see bot/infra/Dockerfile);
+# leave it unset for bare-metal runs.
+STATE_PATH = Path(
+    os.environ.get("RC_DEPLOY_STATE_PATH")
+    or (Path(__file__).resolve().parent.parent / ".state.json")
+).resolve()
 
 
 @dataclass(frozen=True)

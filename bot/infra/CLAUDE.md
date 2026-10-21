@@ -40,9 +40,13 @@ Technical reference for the Telegram bot that orchestrates `deploy_up` / `deploy
 | `handlers.py` | `/up`, `/down`, subdomain `CallbackQueryHandler`. Single `asyncio.Lock` serializes commands. Emits the base64 JSON blob on success. | `Handlers`, `register()`, `_ProgressEditor`, `_encode_blob()` |
 | `deploy_runner.py` | Inserts `deploy/` on `sys.path`, imports `rc_deploy`, builds `DeployConfig` with overrides, streams events. | `build_config()`, `run_up()`, `run_down()` |
 | `state.py` | Atomic read/write/clear of `bot/infra/.state.json`. | `BotState`, `Secrets`, `read_state()`, `write_state()`, `clear_state()` |
-| `.env.example` | `TELEGRAM_BOT_TOKEN`, `ALLOWED_TELEGRAM_USER_ID`. | — |
+| `.env.example` | Telegram vars (always) + DigitalOcean/DNS/Google vars (needed only by the container, which has no access to `deploy/.env` on the host). | — |
 | `requirements.txt` | Chains `../../deploy/requirements.txt` + `python-telegram-bot>=21,<22`. | — |
 | `.gitignore` | Excludes `.env`, `.state.json`, `__pycache__/`, `.venv/`. | — |
+| `Dockerfile` | Alpine image; context is the **repo root** (bakes in `deploy/`, `server/`, `web/`). Non-root uid 10001, state on `/data`, `ENTRYPOINT` → `docker-entrypoint.sh`, `CMD` → `python main.py`. | — |
+| `docker-entrypoint.sh` | Renders `/app/deploy/.env` from the container env (rc_deploy reads a *file*, not `os.environ`), normalises the SSH key to a 0600 copy, then `exec`s the bot. | — |
+| `docker-compose.yml` | One service, `env_file` = `../../deploy/.env` (optional) + `./.env`, named volume `infra_state`, `restart: unless-stopped`, healthcheck from the image. | — |
+| `RUN_DOCKER.md` | Operator runbook: build → up → logs, update, reset state, troubleshooting. | — |
 
 ## Key Flows
 
@@ -102,6 +106,12 @@ The credentials handoff between the Infra and Agent bots is a base64-urlsafe-enc
 bot/infra/.state.json  ← bot-owned, holds runtime secrets, cleared after /down
 deploy/.state.json     ← deploy-owned, holds droplet_id / ip / name / fqdn
 ```
+
+Both locations are overridable by env var so the Docker image can put them on a
+volume instead of inside the code tree: `INFRA_BOT_STATE_PATH`
+(`state.py:19`) and `RC_DEPLOY_STATE_PATH` (`deploy/rc_deploy/state.py:7`). The
+container sets them to `/data/infra-state.json` and `/data/deploy-state.json`.
+Unset = the legacy in-tree paths above, so bare-metal behaviour is unchanged.
 
 Both are gitignored. If they get out of sync (e.g. you ran `deploy.py up` outside the bot), `deploy_up`'s preflight check will refuse with *"State file already exists"* — clean up `deploy/.state.json` manually.
 

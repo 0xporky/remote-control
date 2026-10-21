@@ -1,0 +1,10 @@
+# core.autocrlf=true on the Windows dev box would otherwise check these out
+# with CRLF. Anything that a Linux kernel, shell or cloud-init has to parse
+# must stay LF: a shebang followed by \r fails with a baffling
+# "no such file or directory", and cloud-init silently skips CRLF YAML.
+*.sh text eol=lf
+Dockerfile text eol=lf
+*.yaml text eol=lf
+*.yml text eol=lf
+Caddyfile text eol=lf
+.env.example text eol=lf

@@ -35,39 +35,53 @@ cp .env.example .env   # fill in TELEGRAM_BOT_TOKEN, ALLOWED_TELEGRAM_USER_ID
 python main.py
 ```
 
-**On the Linux host (Docker, Alpine-based):**
+**On the Linux host (Docker — recommended, one container):**
 
-The image bakes in the repo code that gets rsynced to the droplet (`server/`, `web/`, `deploy/`). Secrets — `.env` files and the SSH private key — are bind-mounted at runtime so they stay out of the image. Build context is the repo root.
-
-```bash
-# From the repo root
-docker build -t rc-infra-bot -f bot/infra/Dockerfile .
-```
-
-In `deploy/.env`, set `DO_SSH_KEY_PATH` to the **container** path you'll mount the key at (e.g. `/run/secrets/id_ed25519`), not the host path.
+Full walkthrough in [`infra/RUN_DOCKER.md`](infra/RUN_DOCKER.md). Short version:
 
 ```bash
-docker run -d --name rc-infra-bot --restart unless-stopped \
-  -v "$HOME/.ssh/id_ed25519:/run/secrets/id_ed25519:ro" \
-  rc-infra-bot
+cd bot/infra
+cp .env.example .env && $EDITOR .env   # tokens, DOMAIN, SSH_KEY_HOST_PATH
+docker compose up -d --build
+docker compose logs -f
 ```
+
+The image bakes in the repo code that gets rsynced to the droplet (`server/`, `web/`, `deploy/`), so the build context is the repo root — `bot/infra/docker-compose.yml` sets that up. Secrets stay out of the image: tokens arrive as environment variables and the SSH private key is bind-mounted read-only at `/run/secrets/ssh_key`.
 
 Notes:
 
-- `.state.json` lives in the container's writable layer — survives `docker restart` / `docker stop && docker start`, but `docker rm` wipes it. Don't pass `--rm` to `docker run`. If you must recreate the container while a deploy is live, write down the FQDN and use the DigitalOcean dashboard to tear it down manually.
-- Tail logs: `docker logs -f rc-infra-bot`.
-- Rebuild whenever `server/`, `web/`, or `deploy/` changes — those files are baked into the image at build time.
-- The repo-root `.dockerignore` keeps `.env`, `.state.json`, `.venv/`, `__pycache__/`, and `node_modules/` out of the build context.
+- Both state files live on the named volume `infra_state` (`/data` in the container), via `INFRA_BOT_STATE_PATH` and `RC_DEPLOY_STATE_PATH`. They survive restarts *and* rebuilds; `docker compose down -v` wipes them. Wiping while a droplet is up means you can only tear it down from the DigitalOcean dashboard.
+- `SSH_PRIVATE_KEY` from `deploy/.env` is ignored inside the container (it's a host path). Set `SSH_KEY_HOST_PATH` in `bot/infra/.env` instead; the entrypoint makes a 0600 copy inside the container and points the deploy code at it.
+- Rebuild with `docker compose up -d --build` whenever `server/`, `web/`, `deploy/` or the bot changes — plain `up -d` keeps the old image.
+- The repo-root `.dockerignore` keeps `.env*`, `.state.json`, SSH keys, the OAuth client JSON, `.venv/`, `__pycache__/`, and `node_modules/` out of the build context.
 
 **On the Windows host:**
-It is steps how to run agent via cmd on Windows.
+
+Once `.env` exists, the whole launch is one command — from any directory, or a double-click in Explorer:
+
+```powershell
+bot\agent\run.cmd
+```
+
+`run.cmd` creates `.venv` and installs `requirements.txt` on first run, then starts `main.py`. Unlike the Infra bot it stays in the foreground: the window must remain open, because the agent it spawns needs the interactive desktop session. Ctrl+C stops it.
+
+First-time setup, if `.env` is not there yet:
+
+```powershell
+cd bot\agent
+copy .env.example .env   # fill in TELEGRAM_BOT_TOKEN (a DIFFERENT BotFather bot), ALLOWED_TELEGRAM_USER_ID, PYTHON_BIN
+run.cmd
+```
+
+`PYTHON_BIN` must point at the **agent's** interpreter (`agent\.venv\Scripts\python.exe`), not the bot's — the bot venv has no `aiortc`/`av`, so `/up` would fail at spawn. Set up that venv per [`agent/`](../agent/) first.
+
+The manual equivalent, if you'd rather not use the script:
 
 ```powershell
 cd bot\agent
 py -3.11 -m venv .venv
 .venv\Scripts\activate
 pip install -r requirements.txt
-copy .env.example .env   # fill in TELEGRAM_BOT_TOKEN (a DIFFERENT BotFather bot), ALLOWED_TELEGRAM_USER_ID, PYTHON_BIN
 python main.py
 ```
 
