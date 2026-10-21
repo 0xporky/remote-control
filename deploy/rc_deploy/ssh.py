@@ -1,5 +1,8 @@
 import asyncio
+import base64
+import os
 import shlex
+import struct
 import sys
 from dataclasses import dataclass
 from pathlib import Path
@@ -29,6 +32,11 @@ SSH_OPTS: list[str] = [
     "-o", "UserKnownHostsFile=/dev/null",
     "-o", "LogLevel=ERROR",
     "-o", "ConnectTimeout=5",
+    # Every call here is unattended (the bot runs without a tty), and
+    # wait_for_ssh retries 60 times. Without BatchMode a passphrase-protected
+    # key makes ssh reach for /dev/tty on every single attempt, which only
+    # surfaces as "Permission denied (publickey)" two minutes later.
+    "-o", "BatchMode=yes",
 ]
 
 
@@ -55,6 +63,50 @@ class SSHError(RuntimeError):
             f"Command failed (rc={result.returncode}): {' '.join(shlex.quote(c) for c in cmd)}\n"
             f"stderr: {result.stderr.strip()}"
         )
+
+
+_OPENSSH_MAGIC = b"openssh-key-v1\x00"
+
+
+def key_cipher(key: Path) -> str | None:
+    """Cipher protecting an OpenSSH private key — `"none"` when it has no passphrase.
+
+    The cipher name sits in clear text at the head of the base64 blob, before
+    anything that the passphrase actually protects, so this needs no secrets.
+    Returns None when the file is not in the OpenSSH container format (legacy
+    PEM, PuTTY, ...) — there we can't tell and don't guess.
+    """
+    try:
+        text = key.read_text(errors="replace")
+    except OSError:
+        return None
+    if "OPENSSH PRIVATE KEY" not in text:
+        return None
+    body = "".join(ln for ln in text.splitlines() if not ln.startswith("-----"))
+    try:
+        blob = base64.b64decode(body)
+    except (ValueError, TypeError):
+        return None
+    if not blob.startswith(_OPENSSH_MAGIC) or len(blob) < len(_OPENSSH_MAGIC) + 4:
+        return None
+    rest = blob[len(_OPENSSH_MAGIC):]
+    (length,) = struct.unpack(">I", rest[:4])
+    return rest[4:4 + length].decode("ascii", errors="replace")
+
+
+async def ssh_agent_available() -> bool:
+    """True when an ssh-agent holding at least one identity is reachable.
+
+    An agent can unlock a passphrase-protected key on our behalf, so its
+    presence is what makes such a key usable without a tty.
+    """
+    if not os.environ.get("SSH_AUTH_SOCK"):
+        return False
+    try:
+        result = await _run(["ssh-add", "-l"], timeout=5.0)
+    except (asyncio.TimeoutError, OSError):
+        return False
+    return result.returncode == 0
 
 
 def _ssh_base(key: Path) -> list[str]:
@@ -151,12 +203,20 @@ async def rsync_files(
 async def wait_for_ssh(
     ip: str, key: Path, *, tries: int = 60, delay: float = 2.0
 ) -> None:
+    last_error = ""
     for _ in range(tries):
         result = await ssh_exec(ip, key, "true", check=False)
         if result.returncode == 0:
             return
+        # A booting droplet refuses the connection; a key problem answers
+        # instantly with a real message. Keep it so the timeout can say which.
+        stderr_lines = result.stderr.strip().splitlines()
+        last_error = stderr_lines[-1] if stderr_lines else ""
         await asyncio.sleep(delay)
-    raise TimeoutError(f"Timed out waiting for SSH on {ip} after {tries * delay:.0f}s")
+    msg = f"Timed out waiting for SSH on {ip} after {tries * delay:.0f}s"
+    if last_error:
+        msg += f" (last error: {last_error})"
+    raise TimeoutError(msg)
 
 
 async def wait_for_cloud_init(

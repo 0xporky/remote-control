@@ -7,9 +7,11 @@ from .config import DeployConfig
 from .do_client import DOClient
 from .progress import ProgressEvent
 from .ssh import (
+    key_cipher,
     rsync,
     rsync_files,
     scp,
+    ssh_agent_available,
     ssh_exec,
     wait_for_cloud_init,
     wait_for_health,
@@ -57,6 +59,23 @@ async def deploy_up(config: DeployConfig) -> AsyncIterator[ProgressEvent]:
         yield ProgressEvent(
             "preflight",
             f"SSH private key not found at {config.ssh_private_key}.",
+            level="error",
+        )
+        return
+
+    # A passphrase-protected key cannot be used unattended: ssh needs a tty (or
+    # an agent) to unlock it, and we have neither in the bot container. Catch it
+    # here rather than after the droplet exists — otherwise the first symptom is
+    # a 120s "timed out waiting for SSH" with a running droplet left behind.
+    cipher = key_cipher(config.ssh_private_key)
+    if cipher not in (None, "none") and not await ssh_agent_available():
+        yield ProgressEvent(
+            "preflight",
+            f"SSH key {config.ssh_private_key} is passphrase-protected (cipher: {cipher}) "
+            "and no ssh-agent identity is available, so every connection would fail with "
+            "'Permission denied (publickey)'. Use a passphrase-less deploy key: "
+            "`ssh-keygen -p -N '' -f <copy-of-key>` keeps the same public key, so "
+            "DO_SSH_KEY_FINGERPRINT stays valid.",
             level="error",
         )
         return
