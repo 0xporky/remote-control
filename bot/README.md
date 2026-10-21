@@ -56,14 +56,32 @@ Notes:
 - The repo-root `.dockerignore` keeps `.env*`, `.state.json`, SSH keys, the OAuth client JSON, `.venv/`, `__pycache__/`, and `node_modules/` out of the build context.
 
 **On the Windows host:**
-It is steps how to run agent via cmd on Windows.
+
+Once `.env` exists, the whole launch is one command — from any directory, or a double-click in Explorer:
+
+```powershell
+bot\agent\run.cmd
+```
+
+`run.cmd` creates `.venv` and installs `requirements.txt` on first run, then starts `main.py`. Unlike the Infra bot it stays in the foreground: the window must remain open, because the agent it spawns needs the interactive desktop session. Ctrl+C stops it.
+
+First-time setup, if `.env` is not there yet:
+
+```powershell
+cd bot\agent
+copy .env.example .env   # fill in TELEGRAM_BOT_TOKEN (a DIFFERENT BotFather bot), ALLOWED_TELEGRAM_USER_ID, PYTHON_BIN
+run.cmd
+```
+
+`PYTHON_BIN` must point at the **agent's** interpreter (`agent\.venv\Scripts\python.exe`), not the bot's — the bot venv has no `aiortc`/`av`, so `/up` would fail at spawn. Set up that venv per [`agent/`](../agent/) first.
+
+The manual equivalent, if you'd rather not use the script:
 
 ```powershell
 cd bot\agent
 py -3.11 -m venv .venv
 .venv\Scripts\activate
 pip install -r requirements.txt
-copy .env.example .env   # fill in TELEGRAM_BOT_TOKEN (a DIFFERENT BotFather bot), ALLOWED_TELEGRAM_USER_ID, PYTHON_BIN
 python main.py
 ```
 

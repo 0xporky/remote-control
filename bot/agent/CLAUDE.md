@@ -37,6 +37,7 @@ Technical reference for the Telegram bot that starts and stops the local desktop
 | File | Purpose | Key Exports |
 |------|---------|-------------|
 | `main.py` | Entrypoint; reads `.env`, builds `Application`, runs polling. | `main()` |
+| `run.cmd` | One-command Windows launcher: `cd`s to its own directory, creates `.venv` + installs `requirements.txt` on first run, then starts `main.py`. Runs from any cwd or a double-click. | — |
 | `handlers.py` | `/up`, `/down`, subdomain `CallbackQueryHandler`, paste `MessageHandler`. `asyncio.Lock` serializes commands. | `Handlers`, `register()`, `_decode_blob()` |
 | `agent_runner.py` | Spawns and stops `agent/main.py`. Drains stdout, matches readiness regex, falls back to `psutil` to terminate by PID. | `AgentRunner`, `StartResult` |
 | `state.py` | Atomic read/write/clear of `bot/agent/.state.json`. **No secrets persisted.** | `BotState`, `read_state()`, `write_state()`, `clear_state()` |
