@@ -47,11 +47,11 @@ CORS_ORIGINS: list[str] = [
 GOOGLE_CLIENT_ID: Optional[str] = os.getenv("GOOGLE_CLIENT_ID")
 # Optional: Restrict to specific email domains (comma-separated)
 GOOGLE_ALLOWED_DOMAINS: list[str] = [
-    d.strip() for d in os.getenv("GOOGLE_ALLOWED_DOMAINS", "").split(",") if d.strip()
+    d.strip().lower() for d in os.getenv("GOOGLE_ALLOWED_DOMAINS", "").split(",") if d.strip()
 ]
 # Optional: Restrict to specific email addresses (comma-separated)
 GOOGLE_ALLOWED_EMAILS: list[str] = [
-    e.strip() for e in os.getenv("GOOGLE_ALLOWED_EMAILS", "").split(",") if e.strip()
+    e.strip().lower() for e in os.getenv("GOOGLE_ALLOWED_EMAILS", "").split(",") if e.strip()
 ]
 
 # Static files
