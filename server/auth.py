@@ -96,6 +96,9 @@ def is_google_user_allowed(email: str) -> bool:
     if not config.GOOGLE_ALLOWED_DOMAINS and not config.GOOGLE_ALLOWED_EMAILS:
         return True
 
+    # Allowlists are lowercased in config; Google may return mixed case
+    email = email.lower()
+
     # Check email allowlist
     if email in config.GOOGLE_ALLOWED_EMAILS:
         return True

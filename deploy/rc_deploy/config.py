@@ -111,6 +111,18 @@ def load_config(
             f"Required vars still hold CHANGE_ME placeholders in {env_file}: {', '.join(placeholder)}"
         )
 
+    # .env.example ships GOOGLE_ALLOWED_EMAILS=you@example.com. Left as is, the
+    # deploy succeeds and every real sign-in is rejected with "User not authorized".
+    allow_placeholder = [
+        key for key, suffix in (("GOOGLE_ALLOWED_EMAILS", "@example.com"), ("GOOGLE_ALLOWED_DOMAINS", "example.com"))
+        if any(v.strip().lower().endswith(suffix) for v in raw.get(key, "").split(","))
+    ]
+    if allow_placeholder:
+        raise ConfigError(
+            f"Google allowlist still holds the example.com placeholder in {env_file}: "
+            f"{', '.join(allow_placeholder)}. Put your real Google address there."
+        )
+
     ssh_key = _expand_key(raw.get("SSH_PRIVATE_KEY") or "~/.ssh/id_ed25519")
 
     return DeployConfig(
