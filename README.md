@@ -186,6 +186,87 @@ This attempts a best-effort `docker compose down`, destroys the droplet tracked 
 - The droplet's `~/app/.env` is regenerated on every `up` from a subset of `deploy/.env` (auth/OAuth/session vars only). DigitalOcean/SSH vars are never shipped to the droplet.
 - STUN-only — see the note below.
 
+## Infra bot in Docker (deploy from Telegram)
+
+The usual way to run the stack: the Infra bot (`bot/infra/`) runs in Docker on your PC and does `up`/`down` for you when you send `/up` and `/down` in Telegram. Tested on Windows + Docker Desktop with Git Bash. Full reference: [`bot/infra/RUN_DOCKER.md`](bot/infra/RUN_DOCKER.md).
+
+**0. Things you need before you start (one-time):**
+
+- Docker Desktop running (`docker compose version` works).
+- A Telegram bot token from @BotFather. It must be a different bot from the Agent bot.
+- Your numeric Telegram user id, from @userinfobot.
+- A DigitalOcean API token with read+write access to droplets and domains.
+- A domain whose DNS is hosted on DigitalOcean.
+- A Google OAuth client ID.
+
+**1. Create a deploy SSH key with no passphrase.** A key with a passphrase will not work: the bot has no terminal to type the passphrase into, so `/up` hangs waiting for SSH and then fails with a timeout.
+
+```bash
+ssh-keygen -t ed25519 -N "" -C rc-deploy -f ~/.ssh/id_ed25519_rc_deploy
+doctl compute ssh-key import rc-deploy --public-key-file ~/.ssh/id_ed25519_rc_deploy.pub
+ssh-keygen -l -E md5 -f ~/.ssh/id_ed25519_rc_deploy.pub   # fingerprint; drop the "MD5:" prefix
+```
+
+(Skip this step if `~/.ssh/id_ed25519_rc_deploy` already exists and `doctl compute ssh-key list` shows it.)
+
+**2. Fill in `bot/infra/.env`.** This is the only env file the bot reads, so don't edit `deploy/.env` for this.
+
+```bash
+cd bot/infra
+cp .env.example .env      # skip if .env already exists
+```
+
+| Var | Value |
+| --- | --- |
+| `TELEGRAM_BOT_TOKEN` | the BotFather token |
+| `ALLOWED_TELEGRAM_USER_ID` | your numeric Telegram id |
+| `DO_API_TOKEN` | the DigitalOcean token |
+| `DO_SSH_KEY_FINGERPRINT` | the fingerprint from step 1 |
+| `DOMAIN` | e.g. `myvpnsrv1234.online` |
+| `GOOGLE_CLIENT_ID` | the OAuth client ID |
+| `GOOGLE_ALLOWED_EMAILS` | **your real Google address.** If you leave `you@example.com`, every sign-in gets "User not authorized"; `/up` now refuses to start with it. |
+
+You also have to give the bot the SSH key. **On Windows**, mounting the key file does not work: inside the container the file belongs to root, so the bot can't read it. Pass the key inline instead:
+
+```bash
+echo "SSH_KEY_FILE=/run/secrets/ssh_key_unused" >> .env
+echo "SSH_PRIVATE_KEY_B64=$(base64 -w0 ~/.ssh/id_ed25519_rc_deploy)" >> .env
+```
+
+On Linux you can set `SSH_KEY_HOST_PATH=/home/you/.ssh/id_ed25519_rc_deploy` instead.
+
+**3. Build the image and start the bot** (from `bot/infra/`):
+
+```bash
+docker compose up -d --build --force-recreate
+docker compose logs -f | grep -v api.telegram.org   # wait for "Infra bot starting", then Ctrl+C
+```
+
+**4. Use it from Telegram.**
+
+- `/up` in the Infra bot, then pick a subdomain (`rc`…`rc3`). It takes a few minutes. When it's done, the bot replies with a credentials blob.
+- Paste that blob into the Agent bot and `/up` there. Then open `https://<subdomain>.<DOMAIN>` and sign in with Google.
+- To shut down: `/down` in the Agent bot first, then `/down` in the Infra bot. This deletes the droplet, which is what stops the billing.
+
+**5. After `git pull` or any code change.** The image contains its own copy of `deploy/`, `server/` and `web/`, and a running droplet keeps the code it was deployed with. So:
+
+1. `/down` (if a stack is up).
+2. `docker compose up -d --build --force-recreate` in `bot/infra/`.
+3. `/up`.
+
+A plain `docker compose up -d` without `--build` keeps running the old code.
+
+**6. When something goes wrong:**
+
+| Symptom | Fix |
+| --- | --- |
+| Bot doesn't answer at all | Check `docker compose ps` and the logs. Usually a wrong token or user id, or the container is restarting in a loop because of `entrypoint: …` errors. |
+| `/up` says "Deployment already in progress." | A previous deploy is still recorded. Run `/down`. If the droplet is already gone, see "Reset the state" in `RUN_DOCKER.md`. |
+| `/up` times out waiting for SSH | The key has a passphrase, or the fingerprint doesn't match the key. Debug with `docker compose exec infra-bot ssh -v -i ~/.ssh/id_deploy rc@<ip>`. |
+| "User not authorized" in the browser | Set `GOOGLE_ALLOWED_EMAILS` correctly, then do step 5. |
+
+**Never** run `docker compose down -v` while a droplet is up. The `infra_state` volume holds the droplet id; if you wipe it, the bot can't delete the droplet and you have to delete it by hand in the DigitalOcean dashboard.
+
 ## Documentation
 
 - [`CLAUDE.md`](CLAUDE.md) — architecture overview for AI assistants (and humans skimming the repo)
